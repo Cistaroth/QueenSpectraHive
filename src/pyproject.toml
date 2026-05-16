@@ -5,6 +5,7 @@ description = "Source code for QueenSpectraNet"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "dotenv>=0.9.9",
     "kagglehub>=1.0.1",
     "matplotlib>=3.10.9",
     "pandas>=3.0.2",
