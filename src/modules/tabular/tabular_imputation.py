@@ -50,8 +50,12 @@ class TabularColumnMeanImputerModule(ModelPipelineStep):
         else:
             df = dataframe.copy()
             df[self._impute_columns] = (
-                df[self._impute_columns].fillna(dataframe.mean())
-            )
+                df[self._impute_columns].fillna(
+                    dataframe[self._impute_columns].mean()
+            ))
+            #df[self._impute_columns] = (
+            #    df[self._impute_columns].fillna(dataframe.mean())
+            #)
 
         result = {
             "dataframe": df,
