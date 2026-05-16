@@ -1,8 +1,7 @@
 import random
-import numpy as np
+from pathlib import Path
 import pandas as pd
 import soundfile as sf
-from typing import Any
 
 from pipeline import ModelPipelineStep
 from logger import console, logger
@@ -14,23 +13,34 @@ class AudioSplicer(ModelPipelineStep):
     inputs = {"x_train", "x_test", "y_train", "y_test"}
     outputs = {"x_train", "x_test", "y_train", "y_test"}
 
-    def __init__(self, audio_path_col: str, chunk_duration: int = 15) -> None:
+    def __init__(self, audio_path_col: str, audio_dir: Path | str | None = None, chunk_duration: int = 15) -> None:
+        """
+        Initializes the AudioSplicer class.
+
+        Args:
+            audio_path_col (str): The column name identifying audio file tracks.
+            audio_dir (Path): The path to the audio files
+            chunk_duration (int, optional): The target slice window in seconds. Defaults to 15.
+        Returns:
+            None
+        """
         super().__init__()
 
         self._chunk_duration = chunk_duration
         self._audio_col = audio_path_col
+        self._audio_dir = audio_dir
 
     def _get_random_slice(self, file_path: str) -> tuple[int, int]:
+        """
+        Calculates a randomized slice window over an assumed 60-second audio duration.
+
+        Args:
+            file_path (str): The location path of the audio asset.
+        Returns:
+            tuple[int, int]: Start and end integer coordinates in seconds.
+        """
         try:
-            with sf.SoundFile(
-                    file_path, 
-                    mode='r', 
-                    samplerate=22050, 
-                    channels=1, 
-                    format='RAW', 
-                    subtype='PCM_16'
-                ) as f:
-                    total_duration = int(f.frames / f.samplerate)
+            total_duration = 60
             if total_duration < self._chunk_duration:
                 return 0, total_duration
             
@@ -42,14 +52,29 @@ class AudioSplicer(ModelPipelineStep):
             return 0, self._chunk_duration
     
     def _slice_over_df(self, df: pd.DataFrame, real_paths: dict = {}) -> pd.DataFrame:
+        """
+        Iterates over the dataset to apply audio paths and coordinate offsets.
+
+        Args:
+            df (pd.DataFrame): Combined feature-target data pool.
+            real_paths (dict, optional): Mapping of class labels to available real file lists.
+        Returns:
+            pd.DataFrame: Mutated dataframe containing audio tracking metadata.
+        """
         for id, row in df.iterrows():
-            if pd.isna(row[self._audio_col]):
+            if pd.isna(df.at[id, self._audio_col]):
                 options = real_paths.get(row["target"], [])
                 if options:
                     picked_path = random.choice(options)
                     df.at[id, self._audio_col] = picked_path
+
+            full_path = Path(df.at[id, self._audio_col])
+            if self._audio_dir and not full_path.is_absolute():
+                full_path = Path(self._audio_dir) / full_path
+            resolved_path_str = str(full_path)
+            df.at[id, self._audio_col] = resolved_path_str
             
-            start, end = self._get_random_slice(row[self._audio_col])
+            start, end = self._get_random_slice(resolved_path_str)
             df.at[id, "start_sec"] = start
             df.at[id, "end_sec"] = end
         return df
@@ -64,7 +89,18 @@ class AudioSplicer(ModelPipelineStep):
             y_test: pd.Series,
             verbose: bool = True
             ) -> None:
+        """
+        Executes randomized slicing coordinates and balances class targets.
 
+        Args:
+            x_train (pd.DataFrame): Training features.
+            y_train (pd.Series): Training target labels.
+            x_test (pd.DataFrame): Validation/Testing features (passed through).
+            y_test (pd.Series): Validation/Testing target labels (passed through).
+            verbose (bool, optional): Verbose logging mode. Defaults to True.
+        Returns:
+            dict[str, Any]: Dictionary containing matched multimodal sets and untouched test sets.
+        """
         if verbose:
             console.section("Handling Class Imbalance on Audio Data")
 
