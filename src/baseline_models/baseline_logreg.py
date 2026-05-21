@@ -25,7 +25,7 @@ TASK_NAME = "BASELINE LOGISTIC REGRESSION"
 
 DATASET_HANDLE = "annajyang/beehive-sounds"
 OUTPUT_DIR = Path(__file__).parent.parent / "data"
-CSV_FILEPATH = "D:/Documentos 2/Data_queen_spectra/all_data_updated.csv"
+CSV_FILEPATH = OUTPUT_DIR / "all_data_updated.csv"
 
 DROP_COLUMNS = [
     "weatherID",
@@ -65,10 +65,10 @@ def main() -> None:
             # Print header
             HeaderModule(task=TASK_NAME),
             # Load data from Kaggle
-            #KaggleDataLoaderModule(
-                #dataset_handle=DATASET_HANDLE,
-                #output_dir=OUTPUT_DIR,
-            #),
+            KaggleDataLoaderModule(
+                dataset_handle=DATASET_HANDLE,
+                output_dir=OUTPUT_DIR,
+            ),
             # Load tabular data
             TabularDataLoaderModule(filepath=CSV_FILEPATH),
             # Drop irrelevant columns
