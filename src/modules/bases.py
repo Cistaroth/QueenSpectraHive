@@ -3,6 +3,7 @@ from typing import Any
 
 from pipeline import ModelPipelineStep
 
+
 class TrainerBase(ModelPipelineStep):
     @abstractmethod
     def train(self, x_train, y_train) -> Any:
