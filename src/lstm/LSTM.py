@@ -6,7 +6,10 @@ sys.path.append(str(Path(__file__).parent.parent))
 from pipeline import ModelPipeline
 from modules.utils.header import HeaderModule
 from modules.data_loading.kaggle_loader import KaggleDataLoaderModule
-from modules.tabular.tabular_data_loader import TabularDataLoaderModule
+from modules.data_manipulation.data_loaders import (
+    TabularDataLoaderModule,
+    AudioDataLoaderModule,
+)
 from modules.tabular.tabular_utils import (
     TabularColumnDropperModule,
     TabularOneHotEncoderModule,
@@ -20,25 +23,16 @@ from modules.tabular.tabular_splitters import (
     TabularTrainTestSplitterModule,
 )
 
+sys.path.append(str(Path(__file__).parent.parent))
 
-TASK_NAME = "BASELINE LOGISTIC REGRESSION"
+TASK_NAME = "LSTM"
 
 DATASET_HANDLE = "annajyang/beehive-sounds"
-OUTPUT_DIR = Path(__file__).parent.parent / "data"
-CSV_FILEPATH = "D:/Documentos 2/Data_queen_spectra/all_data_updated.csv"
 
-DROP_COLUMNS = [
-    "weatherID",
-    "lat",
-    "long",
-    "rain",
-    "file name",
-    "queen acceptance",
-    "target",
-    "queen status",
-    "time",
-    "gust speed",
-]
+OUTPUT_DIR = Path(__file__).parent.parent / "data"
+CSV_FILEPATH = OUTPUT_DIR + "/all_data_updated.csv"
+SOUND_FILEPATH = OUTPUT_DIR + "/sound_files/sound_files"
+
 
 TIME_COLUMN = "date"
 TIME_FEATURES = ["hour", "minute", "day", "day_of_week", "week_of_year"]
@@ -50,7 +44,7 @@ IMPUTE_COLUMNS = ["wind speed", "weather temp"]
 TARGET_COLUMN = "queen presence"
 
 
-def main() -> None:
+def main():
     """
     Main function to run the data downloader pipeline
 
@@ -64,32 +58,23 @@ def main() -> None:
         steps=[
             # Print header
             HeaderModule(task=TASK_NAME),
-            # Load data from Kaggle
-            #KaggleDataLoaderModule(
-                #dataset_handle=DATASET_HANDLE,
-                #output_dir=OUTPUT_DIR,
-            #),
+
+            KaggleDataLoaderModule(
+            dataset_handle=DATASET_HANDLE,
+            output_dir=OUTPUT_DIR,
+            ),
+
             # Load tabular data
             TabularDataLoaderModule(filepath=CSV_FILEPATH),
-            # Drop irrelevant columns
-            TabularColumnDropperModule(drop_columns=DROP_COLUMNS),
-            # Extract time features
-            TabularTimeColumnEncoderModule(
-                time_column=TIME_COLUMN,
-                time_features=TIME_FEATURES,
-            ),
-            TabularColumnDropperModule(drop_columns=TIME_FEATURES),
-            # One-hot encode
-            TabularOneHotEncoderModule(columns_to_encode=ONEHOT_COLUMNS),
-            # Mean impute missing values
-            TabularColumnMeanImputerModule(impute_columns=IMPUTE_COLUMNS),
-            # Split into features and target
-            TabularFeatureTargetSplitterModule(target_column=TARGET_COLUMN),
-            # Split into train and test
-            TabularTrainTestSplitterModule(),
+            
+            # Load audio data lazily
+            AudioDataLoaderModule(filepath=SOUND_FILEPATH),
         ],
     ).run()
 
 
 if __name__ == "__main__":
     main()
+
+
+
