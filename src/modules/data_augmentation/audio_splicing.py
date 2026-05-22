@@ -9,9 +9,8 @@ from logger import console, logger
 class AudioSplicer(ModelPipelineStep):
     name = "Audio Splicer"
 
-    # x_test and y_test are just passed through so it doesnt break the pipeline
-    inputs = {"x_train", "x_test", "y_train", "y_test"}
-    outputs = {"x_train", "x_test", "y_train", "y_test"}
+    inputs = {"x_train", "y_train"}
+    outputs = {"x_train", "y_train"}
 
     def __init__(self, audio_path_col: str, audio_dir: Path | str | None = None, chunk_duration: int = 15) -> None:
         """
@@ -85,8 +84,6 @@ class AudioSplicer(ModelPipelineStep):
             self,
             x_train: pd.DataFrame,
             y_train: pd.Series,
-            x_test: pd.DataFrame,
-            y_test: pd.Series,
             verbose: bool = True
             ) -> None:
         """
@@ -95,11 +92,9 @@ class AudioSplicer(ModelPipelineStep):
         Args:
             x_train (pd.DataFrame): Training features.
             y_train (pd.Series): Training target labels.
-            x_test (pd.DataFrame): Validation/Testing features (passed through).
-            y_test (pd.Series): Validation/Testing target labels (passed through).
             verbose (bool, optional): Verbose logging mode. Defaults to True.
         Returns:
-            dict[str, Any]: Dictionary containing matched multimodal sets and untouched test sets.
+            dict[str, Any]: Dictionary containing matched multimodal sets.
         """
         if verbose:
             console.section("Handling Class Imbalance on Audio Data")
@@ -143,12 +138,10 @@ class AudioSplicer(ModelPipelineStep):
         y_resampled = df_x["target"]        
 
         if verbose:
-            logger.info(f"Finised resampling of audio data. \n"
+            logger.info(f"Finished resampling of audio data. \n"
                         f"New class distribution: \n: {y_resampled.value_counts()}"
                         )
         return {
             "x_train": x_resampled,
-            "x_test": x_test,
             "y_train": y_resampled,
-            "y_test": y_test,
             }

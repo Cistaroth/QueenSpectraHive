@@ -8,9 +8,8 @@ from logger import console, logger
 class TabularInterpolation(ModelPipelineStep):
     name = "TabularInterpolation"
 
-    # x_test and y_test are just passed through so it doesnt break the pipeline
-    inputs = {"x_train", "x_test", "y_train", "y_test"}
-    outputs = {"x_train", "x_test", "y_train", "y_test"}
+    inputs = {"x_train", "y_train"}
+    outputs = {"x_train", "y_train"}
 
     def __init__(self, seed: int = 69) -> None:
         """
@@ -30,8 +29,6 @@ class TabularInterpolation(ModelPipelineStep):
             self,
             x_train: pd.DataFrame,
             y_train: pd.Series,
-            x_test: pd.DataFrame,
-            y_test: pd.Series,
             verbose: bool = True
             ) -> None:
         """
@@ -40,8 +37,6 @@ class TabularInterpolation(ModelPipelineStep):
         Args:
             x_train (pd.DataFrame): Training features.
             y_train (pd.Series): Training target labels.
-            x_test (pd.DataFrame): Validation/Testing features (passed through).
-            y_test (pd.Series): Validation/Testing target labels (passed through).
             verbose (bool, optional): Verbose logging mode. Defaults to True.
         Returns:
             dict[str, Any]: Dictionary containing balanced train sets and untouched test sets.
@@ -70,7 +65,5 @@ class TabularInterpolation(ModelPipelineStep):
                         )
         return {
             "x_train": x_resampled,
-            "x_test": x_test,
             "y_train": y_resampled,
-            "y_test": y_test,
             }
