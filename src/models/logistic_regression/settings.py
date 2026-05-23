@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from modules.hyperparameter_tuning.hyperparameter_tuning import FineTuningConfiguration
 from modules.logreg.logreg_train import LogRegTrainModule
 from modules.logreg.logreg_inference import LogRegInferenceModule
-from modules.tabular.tabular_scalers import StandardScalerModule
+from modules.tabular.tabular_scalers import TabularStandardScalerModule
 from config import config
 
 class LogisticRegressionSettings(BaseModel):
@@ -42,10 +42,10 @@ class LogisticRegressionSettings(BaseModel):
 
     HYPERPARAMETER_SETTINGS: FineTuningConfiguration = FineTuningConfiguration(
         model_name="Logistic Regression",
-        model_train= LogRegTrainModule,
-        model_inference= LogRegInferenceModule,
-        transformer= StandardScalerModule,
-        hyperparameters={
+        model_train=LogRegTrainModule,
+        model_inference=LogRegInferenceModule,
+        transformer=TabularStandardScalerModule,
+        model_hyperparameters={
             "C": [0.01, 0.1, 1, 10, 100],
             "l1_ratio": [0, 0.25, 0.5, 0.75, 1],
             "solver": ["saga"],

@@ -1,11 +1,13 @@
+from typing import Any
+
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
-from modules.model_bases import TransformBase
 from logger import console, logger
+from modules.model_bases import TransformBase
 
 
-class MinMaxScalerModule(TransformBase):
+class TabularMinMaxScalerModule(TransformBase):
     name = "MinMaxScaler"
     inputs = {"x_train", "x_test"}
     outputs = {"x_train_scaled", "x_test_scaled"}
@@ -56,14 +58,32 @@ class MinMaxScalerModule(TransformBase):
 
         return result
 
-    def fit_transform(self, x):
-        return self.scaler.fit_transform(x)
+    def fit_transform(self, x: pd.DataFrame) -> pd.DataFrame:
+        """
+        Fit the scaler to the data and transform it
 
-    def transform(self, x):
-        return self.scaler.transform(x)
+        Args:
+            x (pd.DataFrame): The data to fit and transform
+        Returns:
+            pd.DataFrame: The scaled data
+        """
+        return pd.DataFrame(
+            self.scaler.fit_transform(x), columns=x.columns, index=x.index
+        )
+
+    def transform(self, x: pd.DataFrame) -> pd.DataFrame:
+        """
+        Transform the data using the fitted scaler
+
+        Args:
+            x (pd.DataFrame): The data to transform
+        Returns:
+            pd.DataFrame: The scaled data
+        """
+        return pd.DataFrame(self.scaler.transform(x), columns=x.columns, index=x.index)
 
 
-class StandardScalerModule(TransformBase):
+class TabularStandardScalerModule(TransformBase):
     name = "StandardScaler"
     inputs = {"x_train", "x_test"}
     outputs = {"x_train_scaled", "x_test_scaled"}
@@ -78,14 +98,11 @@ class StandardScalerModule(TransformBase):
             None
         """
         super().__init__()
-        
+
         self.scaler = StandardScaler()
 
     def run(
-        self,
-        x_train: pd.DataFrame,
-        x_test: pd.DataFrame,
-        verbose: bool = True
+        self, x_train: pd.DataFrame, x_test: pd.DataFrame, verbose: bool = True
     ) -> dict[str, pd.DataFrame]:
         """
         Scale the data
@@ -119,8 +136,24 @@ class StandardScalerModule(TransformBase):
 
         return result
 
-    def fit_transform(self, x):
-        return self.scaler.fit_transform(x)
+    def fit_transform(self, x: pd.DataFrame) -> pd.DataFrame:
+        """
+        Fit the scaler to the data and transform it
 
-    def transform(self, x):
-        return self.scaler.transform(x)
+        Args:
+            x (pd.DataFrame): The data to fit and transform
+        Returns:
+            pd.DataFrame: The scaled data
+        """
+        return pd.DataFrame(self.scaler.fit_transform(x), columns=x.columns, index=x.index)
+
+    def transform(self, x: pd.DataFrame) -> pd.DataFrame:
+        """
+        Transform the data using the fitted scaler
+
+        Args:
+            x (pd.DataFrame): The data to transform
+        Returns:
+            pd.DataFrame: The scaled data
+        """
+        return pd.DataFrame(self.scaler.transform(x), columns=x.columns, index=x.index)
