@@ -5,7 +5,7 @@
 ![Static Badge](https://img.shields.io/badge/version-1.0.0-green)
 
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
-![TensorFlow](https://img.shields.io/badge/TensorFlow-%23FF6F00.svg?style=for-the-badge&logo=tensorflow&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C.svg?style=for-the-badge&logo=pytorch&logoColor=white)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-%23F7931E.svg?style=for-the-badge&logo=scikit-learn&logoColor=white)
 ![Pandas](https://img.shields.io/badge/pandas-%23150458.svg?style=for-the-badge&logo=pandas&logoColor=white)
 ![NumPy](https://img.shields.io/badge/numpy-%23013243.svg?style=for-the-badge&logo=numpy&logoColor=white)
@@ -22,6 +22,14 @@ Classification of Queen Bee Presence using Tabular and Acoustic Data.
 This project uses the following dataset found on Kaggle: [Dataset](https://www.kaggle.com/datasets/annajyang/beehive-sounds)
 
 ## How to run
+
+Linux is the preferred system to run on, MacOS and Windows are supported but not recommended. Use Windows Subsystem Linux (WSL) if needed.
+
+In order to run, python and Astral UV package manager must be installed. For instructions refer to: 
+ - [[Python Installation Instructions]](https://www.python.org/downloads/) 
+- [[Astral UV Installation Instructions]](https://docs.astral.sh/uv/getting-started/installation/)
+
+From here, run the following commands:
 ```
 # Clone repository
 git clone https://github.com/Cistaroth/QueenSpectraHive.git
@@ -35,10 +43,13 @@ uv sync
 # Activate virtual environment (Linux/MacOS)
 source .venv/bin/activate
 
+# Activate virtual environment (Windows)
+.venv\Scripts\activate 
+
 # Set up environment files
 cp .env.example .env
 
-# For the activating the inference API endpoint, run main.py
+# For activating the inference API endpoint, run main.py
 uv run main.py
 
 # For running any other scripts
