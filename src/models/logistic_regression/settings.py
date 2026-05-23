@@ -49,7 +49,9 @@ class LogisticRegressionSettings(BaseModel):
             "C": [0.01, 0.1, 1, 10, 100],
             "l1_ratio": [0, 0.25, 0.5, 0.75, 1],
             "solver": ["saga"],
+            "class_weight": ["balanced"],
             "max_iter": [10000],
         },
         metric="accuracy",
     )
+    class_names: list[str] = ["Queen Absent", "Queen Present"]

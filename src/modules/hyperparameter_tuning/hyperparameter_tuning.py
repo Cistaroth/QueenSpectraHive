@@ -1,19 +1,30 @@
 from typing import Any
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from rich import box
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
-from rich.table import Table
 from rich.align import Align
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
+from rich.table import Table
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 
+from config import config
+from logger import console, logger
 from modules.hyperparameter_tuning.configuration import FineTuningConfiguration
 from pipeline import ModelPipelineStep
-from logger import console, logger
-from config import config
-
 
 
 class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
@@ -29,7 +40,7 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
         Initialize the hyperparameter tuning class
 
         Args:
-            model_configuration (FineTuningModelConfiguration): 
+            model_configuration (FineTuningModelConfiguration):
                 The configuration for fine-tuning the model.
         Returns:
             None
@@ -39,11 +50,11 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
         self._model_configuration = model_configuration
 
         self._metrics = {
-            "accuracy":  accuracy_score,
-            "f1":        f1_score,
+            "accuracy": accuracy_score,
+            "f1": f1_score,
             "precision": precision_score,
-            "recall":    recall_score,
-            "roc_auc":   roc_auc_score,
+            "recall": recall_score,
+            "roc_auc": roc_auc_score,
         }
 
         if self._model_configuration.metric not in self._metrics:
@@ -54,7 +65,7 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
             )
 
     def _format_parameters(self, parameters: dict[str, Any]) -> str:
-        """"Format the model parameters into a nice string for display in the results table."""
+        """ "Format the model parameters into a nice string for display in the results table."""
         return ", ".join(f"{k}={v}" for k, v in parameters.items())
 
     def _build_results_table(
@@ -105,10 +116,7 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
         return Align.center(table)
 
     def run(
-        self,
-        x_train: pd.DataFrame,
-        y_train: pd.DataFrame,
-        verbose: bool = True
+        self, x_train: pd.DataFrame, y_train: pd.DataFrame, verbose: bool = True
     ) -> dict[str, Any]:
         """
         Run the hyperparameter tuning process with stratified k-fold cross-validation.
@@ -131,8 +139,10 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
         if verbose:
             console.section(title="Hyperparameter tuning with stratified k-fold")
             logger.info(f"Model:    {cfg.model_name}")
-            logger.info(f"Configuration:  {len(model_parameters)}   |   Folds: {cfg.folds}   "
-                        f"|   Metric: {cfg.metric}   |   Scaler: {cfg.transformer.__name__}")
+            logger.info(
+                f"Configuration:  {len(model_parameters)}   |   Folds: {cfg.folds}   "
+                f"|   Metric: {cfg.metric}   |   Transformer: {cfg.transformer.__name__}"
+            )
             console.print()
 
         # Set up stratified k-fold cross-validation and run the tuning process
@@ -157,15 +167,17 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
         )
 
         # Run the tuning process with a progress bar
-        with Progress(*progress_columns, console=console, disable=not verbose, transient=True) as progress:
+        with Progress(
+            *progress_columns, console=console, disable=not verbose, transient=True
+        ) as progress:
             task = progress.add_task("Tuning", total=total_steps)
 
             for idx, model_parameter in enumerate(model_parameters):
                 progress.update(
                     task,
-                    description=f"[{idx+1}/{len(model_parameters)}] {self._format_parameters(model_parameter)}",
+                    description=f"[{idx + 1}/{len(model_parameters)}] {self._format_parameters(model_parameter)}",
                 )
-                
+
                 # Run cross-validation for the current set of model parameters
                 fold_scores: list[float] = []
                 for train_idx, val_idx in folds.split(x_train, y_train):
@@ -174,7 +186,7 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
                     x_val_fold = x_train.iloc[val_idx]
                     y_train_fold = y_train.iloc[train_idx]
                     y_val_fold = y_train.iloc[val_idx]
-                    
+
                     # Fit the transformer on the training fold and
                     # transform both the training and validation folds
                     transformer = cfg.transformer()
@@ -194,15 +206,19 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
 
                     progress.advance(task)
 
-                cv_results.append({
-                    "model_parameter": model_parameter,
-                    "mean_score": float(np.mean(fold_scores)),
-                    "std_score": float(np.std(fold_scores)),
-                    "fold_scores": fold_scores,
-                })
+                cv_results.append(
+                    {
+                        "model_parameter": model_parameter,
+                        "mean_score": float(np.mean(fold_scores)),
+                        "std_score": float(np.std(fold_scores)),
+                        "fold_scores": fold_scores,
+                    }
+                )
 
         # Find the best model parameters based on the mean score across folds
-        best_idx = max(range(len(cv_results)), key=lambda i: cv_results[i]["mean_score"])
+        best_idx = max(
+            range(len(cv_results)), key=lambda i: cv_results[i]["mean_score"]
+        )
         best_result = cv_results[best_idx]
         best_model_parameter = best_result["model_parameter"]
 
@@ -210,9 +226,11 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
         if verbose:
             console.print(self._build_results_table(cv_results, best_idx))
             console.print()
-            logger.info("Starting refitting transformer and training final model on full training set.")
+            logger.info(
+                "Starting refitting transformer and training final model on full training set."
+            )
 
-        # Refit the transformer on the full training set 
+        # Refit the transformer on the full training set
         final_transformer = cfg.transformer()
         x_train_transformed = final_transformer.fit_transform(x=x_train)
 

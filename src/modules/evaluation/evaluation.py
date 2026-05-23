@@ -8,6 +8,7 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     f1_score,
+    classification_report,
 )
 from rich import box
 from rich.table import Table
@@ -24,25 +25,35 @@ class ModelEvaluatorModule(ModelPipelineStep):
     name = "ModelEvaluator"
     inputs = {"model", "transformer", "x_test", "y_test"}
     outputs = {
-        "x_test_scaled", "y_pred", "confusion_matrix",
-        "accuracy", "roc_auc", "precision", "recall", "f1",
+        "x_test_scaled",
+        "y_pred",
+        "confusion_matrix",
+        "accuracy",
+        "roc_auc",
+        "precision",
+        "recall",
+        "f1",
+        "classification_report",
     }
 
     def __init__(
         self,
-        inferencer: type[InferencerBase]
+        inferencer: type[InferencerBase],
+        class_names: list[str] | None = None,
     ) -> None:
         """
         Initialize the model evaluator class
 
         Args:
             inferencer (type[InferencerBase]): The inferencer class to use for making predictions.
+            class_names (list[str] | None, optional): The class names to use in the classification report. Defaults to None.
         Returns:
             None
         """
         super().__init__()
 
         self._inferencer = inferencer
+        self._class_names = class_names
 
     def _format_metrics(self, model: Any, metrics: dict[str, Any]) -> None:
         """
@@ -64,8 +75,8 @@ class ModelEvaluatorModule(ModelPipelineStep):
             padding=(0, 2),
             show_edge=False,
         )
-        metrics_table.add_column("Metric", style="bold")
-        metrics_table.add_column("Score", justify="right")
+        metrics_table.add_column("Metric", style="bold", justify="center")
+        metrics_table.add_column("Score", justify="center")
         for label, key in [
             ("Accuracy", "accuracy"),
             ("Precision", "precision"),
@@ -81,23 +92,77 @@ class ModelEvaluatorModule(ModelPipelineStep):
             padding=(0, 2),
             show_edge=False,
         )
+        names = self._class_names or ["0", "1"]
         cm_table.add_column("", style="bold")
-        cm_table.add_column("Pred 0", justify="right")
-        cm_table.add_column("Pred 1", justify="right")
-        cm_table.add_row("True 0", f"{tn}", f"{fp}")
-        cm_table.add_row("True 1", f"{fn}", f"{tp}")
+        cm_table.add_column(f"Pred {names[0]}", justify="right")
+        cm_table.add_column(f"Pred {names[1]}", justify="right")
+        cm_table.add_row(f"True {names[0]}", f"{tn}", f"{fp}")
+        cm_table.add_row(f"True {names[1]}", f"{fn}", f"{tp}")
 
-        layout = Table.grid(padding=(0, 6))
-        layout.add_column(justify="right")
-        layout.add_column(justify="left")
-        layout.add_row(metrics_table, cm_table)
+        report = metrics["classification_report"]
+
+        report_table = Table(
+            box=box.SIMPLE_HEAVY,
+            header_style="bold cyan",
+            padding=(0, 2),
+            show_edge=False,
+        )
+        report_table.add_column("Class", style="bold")
+        report_table.add_column("Precision", justify="right")
+        report_table.add_column("Recall", justify="right")
+        report_table.add_column("F1", justify="right")
+        report_table.add_column("Support", justify="right")
+
+        summary_keys = {"accuracy", "macro avg", "weighted avg"}
+        class_keys = sorted(k for k in report if k not in summary_keys)
+
+        for key in class_keys:
+            row = report[key]
+            report_table.add_row(
+                str(key),
+                f"{row['precision']:.4f}",
+                f"{row['recall']:.4f}",
+                f"{row['f1-score']:.4f}",
+                str(int(row["support"])),
+            )
+
+        report_table.add_section()
+
+        for label in ("macro avg", "weighted avg"):
+            if label not in report:
+                continue
+            row = report[label]
+            report_table.add_row(
+                label,
+                f"{row['precision']:.4f}",
+                f"{row['recall']:.4f}",
+                f"{row['f1-score']:.4f}",
+                str(int(row["support"])),
+            )
+
+        table_width = 80
+        metrics_table.min_width = table_width
+        cm_table.min_width = table_width
+        report_table.min_width = table_width
 
         title = Text(
             f"Evaluation — {model.__class__.__name__}",
             style="bold",
             justify="center",
         )
-        console.print(Align.center(Group(title, Text(""), layout)))
+        console.print(
+            Align.center(
+                Group(
+                    title,
+                    Text(""),
+                    metrics_table,
+                    Text(""),
+                    cm_table,
+                    Text(""),
+                    report_table,
+                )
+            )
+        )
 
     def run(
         self,
@@ -138,7 +203,9 @@ class ModelEvaluatorModule(ModelPipelineStep):
             y_pred_proba = inferencer.inference_proba(model, x_test_scaled)
             roc_auc = roc_auc_score(y_score=y_pred_proba, y_true=y_test)
         except NotImplementedError:
-            logger.warning("Inference proba not implemented for this inferencer. ROC AUC will be set to 0.5.")
+            logger.warning(
+                "Inference proba not implemented for this inferencer. ROC AUC will be set to 0.5."
+            )
             roc_auc = None
 
         # Calculate the evaluation metrics
@@ -146,11 +213,18 @@ class ModelEvaluatorModule(ModelPipelineStep):
             "x_test_scaled": x_test_scaled,
             "y_pred": y_pred,
             "confusion_matrix": confusion_matrix(y_pred=y_pred, y_true=y_test),
-            "accuracy":  balanced_accuracy_score(y_pred=y_pred, y_true=y_test),
-            "roc_auc":   roc_auc,
+            "accuracy": balanced_accuracy_score(y_pred=y_pred, y_true=y_test),
+            "roc_auc": roc_auc,
             "precision": precision_score(y_pred=y_pred, y_true=y_test),
-            "recall":    recall_score(y_pred=y_pred, y_true=y_test),
-            "f1":        f1_score(y_pred=y_pred, y_true=y_test),
+            "recall": recall_score(y_pred=y_pred, y_true=y_test),
+            "f1": f1_score(y_pred=y_pred, y_true=y_test),
+            "classification_report": classification_report(
+                y_true=y_test,
+                y_pred=y_pred,
+                target_names=self._class_names,
+                output_dict=True,
+                zero_division=0,
+            ),
         }
 
         # Format and print the evaluation metrics to the console

@@ -98,7 +98,8 @@ def main() -> None:
 
             # Model Evaluation
             ModelEvaluatorModule(
-                inferencer=settings.HYPERPARAMETER_SETTINGS.model_inference
+                inferencer=settings.HYPERPARAMETER_SETTINGS.model_inference,
+                class_names=settings.class_names,
             ).set_dependency(["x_test", "y_test"], -2),
         ],
     ).run()
