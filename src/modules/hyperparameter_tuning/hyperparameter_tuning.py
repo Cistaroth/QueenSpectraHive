@@ -11,7 +11,7 @@ from rich.align import Align
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 
-from modules.bases import TrainerBase, InferencerBase, ScalerBase
+from modules.model_bases import TrainerBase, InferencerBase, ScalerBase
 from pipeline import ModelPipelineStep
 from logger import console, logger
 from config import config

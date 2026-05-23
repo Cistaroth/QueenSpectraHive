@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 
-from modules.hyperparameter_tuning import TrainerBase, InferencerBase
+from modules.hyperparameter_tuning.hyperparameter_tuning import TrainerBase, InferencerBase
 from logger import console, logger
 
 class LogRegTrainModule(TrainerBase):
@@ -23,7 +23,7 @@ class LogRegTrainModule(TrainerBase):
         x_train_scaled: pd.DataFrame,
         y_train: pd.DataFrame,
         verbose: bool = True
-    ) -> None:
+    ) -> dict[str, LogisticRegression]:
         if verbose:
             console.section(title="Training Logistic Regression Model")
             logger.info(f"Training on: {x_train_scaled.shape}")
@@ -45,7 +45,7 @@ class LogRegTrainModule(TrainerBase):
         self,
         x_train_scaled: pd.DataFrame,
         y_train: pd.DataFrame
-    ) -> None:
+    ) -> LogisticRegression:
         return self.run(x_train_scaled=x_train_scaled, y_train=y_train, verbose=False)["model"]
 
 class LogRegInferenceModule(InferencerBase):
@@ -58,7 +58,7 @@ class LogRegInferenceModule(InferencerBase):
         model: LogisticRegression,
         x_test_scaled: pd.DataFrame,
         verbose: bool = True
-    ) -> None:
+    ) -> dict[str, np.ndarray]:
         if verbose:
             console.section(title="Evaluating Logistic Regression Model")
             logger.info(f"Evaluating on: {x_test_scaled.shape}")

@@ -15,12 +15,12 @@ from rich.text import Text
 from rich.console import Group
 from rich.align import Align
 
-from modules.bases import InferencerBase, ScalerBase
+from modules.model_bases import InferencerBase, ScalerBase
 from pipeline import ModelPipelineStep
 from logger import console, logger
 
 
-class ModelEvaluator(ModelPipelineStep):
+class ModelEvaluatorModule(ModelPipelineStep):
     name = "ModelEvaluator"
     inputs = {"model", "scaler", "x_test", "y_test"}
     outputs = {
