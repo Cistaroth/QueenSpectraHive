@@ -1,11 +1,11 @@
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
-from modules.hyperparameter_tuning.hyperparameter_tuning import ScalerBase
+from modules.model_bases import TransformBase
 from logger import console, logger
 
 
-class MinMaxScalerModule(ScalerBase):
+class MinMaxScalerModule(TransformBase):
     name = "MinMaxScaler"
     inputs = {"x_train", "x_test"}
     outputs = {"x_train_scaled", "x_test_scaled"}
@@ -19,9 +19,9 @@ class MinMaxScalerModule(ScalerBase):
         Returns:
             None
         """
-        self.scaler = MinMaxScaler()
-
         super().__init__()
+
+        self.scaler = MinMaxScaler()
 
     def run(
         self, x_train: pd.DataFrame, x_test: pd.DataFrame, verbose: bool = True
@@ -63,7 +63,7 @@ class MinMaxScalerModule(ScalerBase):
         return self.scaler.transform(x)
 
 
-class StandardScalerModule(ScalerBase):
+class StandardScalerModule(TransformBase):
     name = "StandardScaler"
     inputs = {"x_train", "x_test"}
     outputs = {"x_train_scaled", "x_test_scaled"}
@@ -77,12 +77,15 @@ class StandardScalerModule(ScalerBase):
         Returns:
             None
         """
+        super().__init__()
+        
         self.scaler = StandardScaler()
 
-        super().__init__()
-
     def run(
-        self, x_train: pd.DataFrame, x_test: pd.DataFrame, verbose: bool = True
+        self,
+        x_train: pd.DataFrame,
+        x_test: pd.DataFrame,
+        verbose: bool = True
     ) -> dict[str, pd.DataFrame]:
         """
         Scale the data

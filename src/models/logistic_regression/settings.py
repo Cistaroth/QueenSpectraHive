@@ -2,8 +2,9 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from modules.hyperparameter_tuning.hyperparameter_tuning import FineTuningModelConfiguration
-from modules.logreg.logreg import LogRegTrainModule, LogRegInferenceModule
+from modules.hyperparameter_tuning.hyperparameter_tuning import FineTuningConfiguration
+from modules.logreg.logreg_train import LogRegTrainModule
+from modules.logreg.logreg_inference import LogRegInferenceModule
 from modules.tabular.tabular_scalers import StandardScalerModule
 from config import config
 
@@ -39,11 +40,11 @@ class LogisticRegressionSettings(BaseModel):
     TARGET_COLUMN: str = "queen presence"
     TRAIN_TEST_SPLIT: float = config.TRAIN_TEST_SPLIT
 
-    HYPERPARAMETER_SETTINGS: FineTuningModelConfiguration = FineTuningModelConfiguration(
+    HYPERPARAMETER_SETTINGS: FineTuningConfiguration = FineTuningConfiguration(
         model_name="Logistic Regression",
         model_train= LogRegTrainModule,
         model_inference= LogRegInferenceModule,
-        scaler= StandardScalerModule,
+        transformer= StandardScalerModule,
         hyperparameters={
             "C": [0.01, 0.1, 1, 10, 100],
             "l1_ratio": [0, 0.25, 0.5, 0.75, 1],

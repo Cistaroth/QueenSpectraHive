@@ -34,7 +34,7 @@ class TabularFeatureTargetSplitterModule(ModelPipelineStep):
         self,
         dataframe: pd.DataFrame,
         verbose: bool = True,
-    ) -> dict[str, pd.DataFrame]:
+    ) -> dict[str, pd.DataFrame | pd.Series]:
         """
         Split the dataframe into features and target
 
@@ -47,7 +47,7 @@ class TabularFeatureTargetSplitterModule(ModelPipelineStep):
         if verbose:
             console.section("Splitting dataframe into features and target")
 
-        result: dict[str, pd.DataFrame] = {
+        result: dict[str, pd.DataFrame | pd.Series] = {
             "features": dataframe.drop(columns=self._target_column),
             "target": dataframe[self._target_column],
         }

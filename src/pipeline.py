@@ -43,8 +43,8 @@ class ModelPipelineStep(ABC):
             list[str] | str | dict[str, str | int | None] | None
         ),
         dependency: str | int | None,
-        kwargs: str | int | None
-    ) -> str | int | None:
+        kwargs: dict[str, str | int | None],
+    ) -> dict[str, str | int | None]:
         """
         Normalize the dependency of a parameter.
         
@@ -56,7 +56,8 @@ class ModelPipelineStep(ABC):
             kwargs: Alternative way of providing a name-to-dependency
                 mapping.
         Returns:
-            str | int | None: The dependency of the parameter.
+            dict[str, str | int | None]: A mapping from parameter name to
+            dependency.
         """
 
         if isinstance(parameter_names, dict):
@@ -144,8 +145,9 @@ class ModelPipelineStep(ABC):
             for parameter_name in self.inputs
         ]
 
+    
     @abstractmethod
-    def run(self, **kwargs: Any) -> dict[str, Any] | None:
+    def run(self, *args: Any, **kwargs: Any) -> dict[str, Any] | None:
         """Run the step. Should be implemented by subclasses."""
 
     def __str__(self) -> str:
@@ -178,7 +180,7 @@ class ModelPipeline:
         # Insert steps and their index and name mappings
         if isinstance(steps, list):
             self._steps = steps
-            self._steps_name_map = {idx: idx for idx in range(len(steps))}
+            self._steps_name_map = {str(idx): idx for idx in range(len(steps))}
         elif isinstance(steps, dict):
             self._steps = list(steps.values())
             self._steps_name_map = {
@@ -469,7 +471,7 @@ class ModelPipeline:
         # Compile history
         history = [
             ModelPipelineStepOutputs(
-                name=label,
+                name=str(label),
                 output=self._results_context[idx],
             )
             for idx, label in enumerate(self._step_labels)

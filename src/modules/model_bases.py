@@ -10,18 +10,15 @@ class TrainerBase(ModelPipelineStep):
 
 class InferencerBase(ModelPipelineStep):
     @abstractmethod
-    def inference(self, model, x_test_scaled) -> Any:
+    def inference(self, model, x_test) -> Any:
         pass
 
     @abstractmethod
-    def inference_proba(self, model, x_test_scaled) -> Any:
+    def inference_proba(self, model, x_test) -> Any:
         pass
 
 
-class ScalerBase(ModelPipelineStep):
-    def scale(self, x_train, x_val) -> Any:
-        return self.fit_transform(x=x_train), self.transform(x=x_val)
-
+class TransformBase(ModelPipelineStep):
     @abstractmethod
     def fit_transform(self, x) -> Any:
         pass
