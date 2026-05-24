@@ -1,0 +1,11 @@
+services:
+  app:
+    build: .
+    image: queenspectrahive:1.0
+    env_file:
+      - .env
+    environment:
+      - HOST=0.0.0.0
+      - RUN_WITH_RELOAD=False
+    ports:
+      - "${PORT:-6769}:${PORT:-6769}"
