@@ -5,5 +5,5 @@ router = APIRouter()
 
 @router.get("/", description="Root endpoint that redirects to documentation.")
 async def root() -> RedirectResponse:
-    return RedirectResponse(url="/docs")
+    return RedirectResponse(url="/interface/index.html")
 

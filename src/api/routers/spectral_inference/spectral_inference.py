@@ -25,7 +25,8 @@ async def spectral_inference(file: UploadFile) -> dict[str, str | bool]:
     try:
         INFERENCE_PIPELINE.add_context(step=0, context={"file": file})
         result = INFERENCE_PIPELINE.run()[-1].output["result"]
-    except Exception:
+    except Exception as e:
+        print("Error during inference:", e)
         raise HTTPException(
             status_code=500,
             detail="An error occurred during inference. Please try again later."
