@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -33,7 +34,7 @@ DATASET_HANDLE = "annajyang/beehive-sounds"
 
 OUTPUT_DIR = Path(__file__).parent.parent / "data"
 CSV_FILEPATH = OUTPUT_DIR / "all_data_updated.csv"
-SOUND_FILEPATH = OUTPUT_DIR / "/sound_files" / "sound_files"
+SOUND_FILEPATH = OUTPUT_DIR / "sound_files" / "sound_files"
 
 
 TIME_COLUMN = "date"
@@ -61,31 +62,50 @@ def main():
         ],
     )
 
-    # 1. Run the base data setups
     history = pipeline.run()
-
-    # 2. 🚀 THE ACID TEST: Grab the generated dataset from the pipeline history
     dataset = history[-1].output["dataset"]
     
-    print("\n📬 FETCHING DATA FROM TEAMMATE'S LAZY AUDIO LOADER...")
+    print("\nFETCHING DATA FROM LAZY AUDIO LOADER...")
     # Trigger __getitem__(0) to fetch a single sample
-    waveform, start_sec, end_sec = dataset[0]
+    waveform = dataset[0]
     
-    print(f"   • Received Waveform shape: {waveform.shape}")
-    print(f"   • Received Slicing Windows: {start_sec}s -> {end_sec}s")
+    print(f" Received Waveform shape: {waveform.shape}")
 
-    # 3. 🚀 Pass those exact extracted variables directly into your MFCCExtractor
     extractor = MFCCExtractor(n_mfcc=40)
     extraction_results = extractor.run(
         waveform=waveform,
-        sample_rate=16000, # target_sample_rate specified in their loader
-        start_sec=start_sec,
-        end_sec=end_sec,
+        sample_rate=16000,
         verbose=True
     )
     
-    print("\n🏁 FINAL TEST VERIFICATION:")
-    print(f"   • Final MFCC Matrix Tensor Shape: {extraction_results['mfcc'].shape}")
+    print("\nFINAL TEST VERIFICATION:")
+    print(f"  Final MFCC Matrix Tensor Shape: {extraction_results['mfcc'].shape}")
+
+    print("\n Generating visualization plots...")
+    
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+    fig.suptitle(f"Audio Session", fontsize=14, fontweight='bold')
+
+    waveform_np = waveform[0].numpy()
+    ax1.plot(waveform_np, color='#1f77b4', alpha=0.7)
+    ax1.set_title("Stitched & Spliced Waveform (Time Domain)")
+    ax1.set_xlabel("Samples")
+    ax1.set_ylabel("Amplitude")
+    ax1.grid(True, linestyle='--', alpha=0.5)
+
+    mfcc_np = extraction_results['mfcc'][0].numpy()
+    im = ax2.imshow(mfcc_np, cmap='viridis', origin='lower', aspect='auto')
+    ax2.set_title("Extracted MFCC Coefficients (Frequency Domain Feature Map)")
+    ax2.set_xlabel("Time Frames")
+    ax2.set_ylabel("MFCC Coefficients")
+    fig.colorbar(im, ax=ax2, label="dB / Energy")
+
+    plt.tight_layout()
+    
+    output_image_path = Path(__file__).parent.parent / "audio_test_verification.png"
+    plt.savefig(output_image_path, dpi=150)
+    print(f"Success! Plot saved cleanly to: {output_image_path}")
 
 
 if __name__ == "__main__":

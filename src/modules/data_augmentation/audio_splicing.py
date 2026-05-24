@@ -39,9 +39,14 @@ class AudioSplicer(ModelPipelineStep):
             tuple[int, int]: Start and end integer coordinates in seconds.
         """
         try:
-            total_duration = 60
+            stem = Path(file_path).stem
+            segments = list(self._audio_dir.glob(f"{stem}__segment*.wav")) if self._audio_dir else []
+            nr_segments = len(segments) if segments else 1
+            total_duration = 60 * nr_segments
+
             if total_duration < self._chunk_duration:
                 return 0, total_duration
+            
             
             max_start = total_duration - self._chunk_duration
             start_point = round(random.uniform(0, max_start))
