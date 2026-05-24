@@ -1,6 +1,4 @@
-def main():
-    print("Hello from QueenSpectraNet!")
-
+from api.server import api_serve
 
 if __name__ == "__main__":
-    main()
+    api_serve()

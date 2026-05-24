@@ -6,15 +6,16 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "dotenv>=0.9.9",
-    "imblearn>=0.0",
+    "fastapi>=0.136.1",
     "kagglehub>=1.0.1",
     "matplotlib>=3.10.9",
     "pandas>=3.0.2",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
     "python-dotenv>=1.2.2",
+    "python-multipart>=0.0.29",
     "rich>=15.0.0",
     "scikit-learn>=1.8.0",
     "seaborn>=0.13.2",
-    "soundfile>=0.13.1",
+    "uvicorn>=0.47.0",
 ]
