@@ -34,7 +34,7 @@ class TabularFeatureTargetSplitterModule(ModelPipelineStep):
         self,
         dataframe: pd.DataFrame,
         verbose: bool = True,
-    ) -> dict[str, pd.DataFrame]:
+    ) -> dict[str, pd.DataFrame | pd.Series]:
         """
         Split the dataframe into features and target
 
@@ -47,7 +47,7 @@ class TabularFeatureTargetSplitterModule(ModelPipelineStep):
         if verbose:
             console.section("Splitting dataframe into features and target")
 
-        result: dict[str, pd.DataFrame] = {
+        result: dict[str, pd.DataFrame | pd.Series] = {
             "features": dataframe.drop(columns=self._target_column),
             "target": dataframe[self._target_column],
         }
@@ -66,6 +66,33 @@ class TabularTrainValidationTestSplitterModule(ModelPipelineStep):
     name = "TabularTrainValidationTestSplitter"
     inputs = {"features", "target"}
     outputs = {"x_train", "x_val", "x_test", "y_train", "y_val", "y_test"}
+
+    def __init__(
+        self,
+        train_test_split: float = config.TRAIN_TEST_SPLIT,
+        train_validation_split: float = config.TRAIN_VALIDATION_SPLIT,
+        random_state: int = config.SEED,
+    )-> None:
+        """
+        Initialize the train-validation-test splitter class
+
+        Args:
+            train_test_split (float, optional): The proportion of the dataset to
+                include in the test split. Defaults to config.TRAIN_TEST_SPLIT.
+            train_validation_split (float, optional): The proportion of the
+                training set to include in the validation split. Defaults to
+                config.TRAIN_VALIDATION_SPLIT.
+            random_state (int, optional): The random seed. Defaults to
+                config.SEED.
+        Returns:
+            None
+        """
+
+        self._train_test_split = train_test_split
+        self._train_validation_split = train_validation_split
+        self._random_state = random_state
+
+        super().__init__()
 
     def run(
         self,
@@ -92,15 +119,15 @@ class TabularTrainValidationTestSplitterModule(ModelPipelineStep):
         x_train, x_test, y_train, y_test = train_test_split(
             features,
             target,
-            test_size=config.TRAIN_TEST_SPLIT,
-            random_state=config.SEED,
+            test_size=self._train_test_split,
+            random_state=self._random_state,
         )
 
         x_train, x_val, y_train, y_val = train_test_split(
             x_train,
             y_train,
-            test_size=config.TRAIN_VALIDATION_SPLIT,
-            random_state=config.SEED,
+            test_size=self._train_validation_split,
+            random_state=self._random_state,
         )
 
         x_train = cast(pd.DataFrame, x_train)
@@ -137,6 +164,28 @@ class TabularTrainTestSplitterModule(ModelPipelineStep):
     inputs = {"features", "target"}
     outputs = {"x_train", "x_test", "y_train", "y_test"}
 
+    def __init__(
+        self,
+        train_test_split: float = config.TRAIN_TEST_SPLIT,
+        random_state: int = config.SEED,
+    ) -> None:
+        """
+        Initialize the train-test splitter class
+
+        Args:
+            train_test_split (float, optional): The proportion of the dataset to
+                include in the test split. Defaults to config.TRAIN_TEST_SPLIT.
+            random_state (int, optional): The random seed. Defaults to
+                config.SEED.
+        Returns:
+            None
+        """
+
+        self._train_test_split = train_test_split
+        self._random_state = random_state
+
+        super().__init__()
+
     def run(
         self,
         features: pd.DataFrame,
@@ -159,8 +208,8 @@ class TabularTrainTestSplitterModule(ModelPipelineStep):
         x_train, x_test, y_train, y_test = train_test_split(
             features,
             target,
-            test_size=config.TRAIN_TEST_SPLIT,
-            random_state=config.SEED,
+            test_size=self._train_test_split,
+            random_state=self._random_state,
         )
 
         x_train = cast(pd.DataFrame, x_train)
