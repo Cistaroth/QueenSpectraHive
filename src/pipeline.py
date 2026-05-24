@@ -438,7 +438,8 @@ class ModelPipeline:
             results_overview[idx] = step.outputs
 
     def run(self) -> list[ModelPipelineStepOutputs]:
-        """Run the model pipeline.
+        """
+        Run the model pipeline.
 
         Returns:
             list[ModelPipelineStepOutputs]: The outputs/history of the

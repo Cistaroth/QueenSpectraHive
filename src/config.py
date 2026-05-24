@@ -19,7 +19,12 @@ class Config(BaseSettings):
     SEED: int
     TRAIN_TEST_SPLIT: float
     TRAIN_VALIDATION_SPLIT: float
+    HOST: str
+    PORT: int
+    RUN_WITH_RELOAD: bool
+    API_DESCRIPTION: str
+    API_VERSION: str
     KAGGLE_API_TOKEN: str
 
-load_dotenv(dotenv_path= ENV_FILEPATH)
+load_dotenv(ENV_FILEPATH)
 config = Config()
