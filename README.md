@@ -21,7 +21,35 @@ Classification of Queen Bee Presence using Tabular and Acoustic Data.
 
 This project uses the following dataset found on Kaggle: [Dataset](https://www.kaggle.com/datasets/annajyang/beehive-sounds)
 
+
 ## How to run
+> [!IMPORTANT]
+> To run the program, we provide two methods: Docker vs Manual. Refer to relevant sections.
+
+### → Docker
+
+We assume installation of Docker Desktop or an equivalent. For installation guides refer to:
+- [Docker Installation Guide](https://www.docker.com/get-started/).
+
+From here, run the following commands:
+```
+# Clone repository
+git clone https://github.com/Cistaroth/QueenSpectraHive.git
+
+# Move into src
+cd "QueenSpectraHive"
+
+# Set up environment files - Insert values into .env afterwards
+cp .env.example .env
+
+# Run docker
+docker compose up
+
+# The service now runs on HOST:PORT
+```
+
+
+### → Manually
 
 Linux is the preferred system to run on, MacOS and Windows are supported but not recommended. Use Windows Subsystem Linux (WSL) if needed.
 
@@ -35,10 +63,13 @@ From here, run the following commands:
 git clone https://github.com/Cistaroth/QueenSpectraHive.git
 
 # Move into src
-cd src
+cd "QueenSpectraHive"
 
 # Install all required libraries
 uv sync
+
+# Set up environment files - Insert values into .env afterwards
+cp .env.example .env
 
 # Activate virtual environment (Linux/MacOS)
 source .venv/bin/activate
@@ -46,11 +77,10 @@ source .venv/bin/activate
 # Activate virtual environment (Windows)
 .venv\Scripts\activate 
 
-# Set up environment files
-cp .env.example .env
-
 # For activating the inference API endpoint, run main.py
-uv run main.py
+uv run "src/main.py"
+
+# The service now runs on HOST:PORT
 
 # For running any other scripts
 uv run "SCRIPT-PATH-HERE"

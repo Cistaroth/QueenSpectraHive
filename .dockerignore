@@ -1,0 +1,108 @@
+# ---- Secrets / environment (keep .env.example!) ----
+.env
+.env.*
+**/.env
+**/.env.*
+.envrc
+!.env.example
+!**/.env.example
+
+# ---- Git & Docker metadata ----
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+*.Dockerfile
+
+# ---- Data folders (large) ----
+src/data/
+
+# ---- Editor / IDE ----
+.vscode/
+.spyderproject
+.spyproject
+.ropeproject
+# .idea/
+
+# ---- Python virtual environments ----
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ---- Byte-compiled / optimized ----
+__pycache__/
+**/__pycache__/
+*.py[codz]
+*$py.class
+*.so
+
+# ---- Distribution / packaging ----
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.manifest
+*.spec
+
+# ---- Installer logs ----
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ---- Tests / coverage / type checkers ----
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py.cover
+*.lcov
+.hypothesis/
+.pytest_cache/
+cover/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# ---- Notebooks ----
+.ipynb_checkpoints
+profile_default/
+ipython_config.py
+
+# ---- Logs / DB ----
+*.log
+db.sqlite3
+db.sqlite3-journal
+
+# ---- Misc tooling ----
+.pdm-python
+.pdm-build/
+.pixi/*
+!.pixi/config.toml
+__pypackages__/
+cython_debug/
+.pypirc
+tempCodeRunnerFile.py

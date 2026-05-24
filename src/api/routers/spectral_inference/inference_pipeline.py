@@ -26,6 +26,8 @@ class SpectralInferencePlaceholderModule(ModelPipelineStep):
         
         # Upload the file to the specified path
         save_path = self._save_path / "inference_input.wav"
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        
         with save_path.open("wb") as f:
             shutil.copyfileobj(file.file, f)
         
