@@ -11,6 +11,12 @@ from models.lstm.settings import (
     OUTPUT_DIR,
     SOUND_FILEPATH,
     TASK_NAME,
+    NN_ARCHITECTURE,
+    DROP_COLUMNS,
+    TIME_COLUMN,
+    TIME_FEATURES,
+    ONEHOT_COLUMNS,
+    IMPUTE_COLUMNS
 )
 from modules.data_loading.audio_data_loader import (
     AudioDataLoaderModule,
@@ -33,6 +39,18 @@ from modules.tabular.tabular_utils import (
 from modules.utils.header import HeaderModule
 from pipeline import ModelPipeline
 
+from modules.lstm.tabularnn_embedding import TabularNNEmbeddingsModule
+
+
+
+'''
+So the main idea for the LSTM is to firstly, run the Mel spectrograms through the LSTM to get a audio summary vector
+Then, we combine these with the tabular data ran through a Feed forwards neural network. You can't really pass tabular
+data alongside audio data in a LSTM because the tabular data does not change with time but the audio does so it will get confused.
+
+Finally, we concatonate both of these to give us a final prediction. To be fair it is kind of like an ensamble, anyways.
+'''
+
 
 def main():
     pipeline = ModelPipeline(
@@ -42,8 +60,23 @@ def main():
                 dataset_handle=DATASET_HANDLE,
                 output_dir=OUTPUT_DIR,
             ),
+            # Load tabular data
             TabularDataLoaderModule(filepath=CSV_FILEPATH),
+            # Load audio data
             AudioDataLoaderModule(filepath=SOUND_FILEPATH),
+            TabularColumnDropperModule(drop_columns=DROP_COLUMNS),
+            # Extract time features
+            TabularTimeColumnEncoderModule(
+                time_column=TIME_COLUMN,
+                time_features=TIME_FEATURES,
+            ),
+            TabularColumnDropperModule(drop_columns=TIME_FEATURES),
+            # One-hot encode
+            TabularOneHotEncoderModule(columns_to_encode=ONEHOT_COLUMNS),
+            # Mean impute missing values
+            TabularColumnMeanImputerModule(impute_columns=IMPUTE_COLUMNS),
+            # 
+            TabularNNEmbeddingsModule(NN_ARCHITECTURE),
         ],
     )
 
@@ -57,9 +90,7 @@ def main():
     print(f" Received Waveform shape: {waveform.shape}")
 
     extractor = MFCCExtractorModule(n_mfcc=40)
-    extraction_results = extractor.run(
-        waveform=waveform, sample_rate=16000, verbose=True
-    )
+    extraction_results = extractor.run(waveform=waveform, sample_rate=16000, verbose=True)
 
     print("\nFINAL TEST VERIFICATION:")
     print(f"  Final MFCC Matrix Tensor Shape: {extraction_results['mfcc'].shape}")
@@ -85,9 +116,7 @@ def main():
 
     plt.tight_layout()
 
-    output_image_path = (
-        Path(__file__).parents[2] / "plots" / "audio_test_verification.png"
-    )
+    output_image_path = Path(__file__).parents[2] / "plots" / "audio_test_verification.png"
     plt.savefig(output_image_path, dpi=150)
     print(f"Success! Plot saved cleanly to: {output_image_path}")
 

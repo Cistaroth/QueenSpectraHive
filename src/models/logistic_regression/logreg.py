@@ -66,6 +66,7 @@ def main() -> None:
                 time_column=settings.TIME_COLUMN,
                 time_features=settings.TIME_FEATURES,
             ),
+            
             TabularColumnDropperModule(
                 drop_columns=settings.TIME_FEATURES
             ),
