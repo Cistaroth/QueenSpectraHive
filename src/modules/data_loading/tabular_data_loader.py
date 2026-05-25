@@ -15,6 +15,7 @@ class TabularDataLoaderModule(ModelPipelineStep):
         filepath: Path = (
             Path(__file__).parent.parent / "data" / "all_data_updated.csv"
         ),
+        max_samples: int | None = None,
     ) -> None:
         """
         Initializes the TabularDataLoader class
@@ -23,10 +24,13 @@ class TabularDataLoaderModule(ModelPipelineStep):
             filepath (Path, optional): Filepath to the tabular data.
                 Defaults to Path(__file__).parent / "data" /
                 "all_data_updated.csv".
+            max_samples (int | None, optional): Maximum number of samples to load.
+                If None, loads all data. Defaults to None.
         Returns:
             None
         """
         self._filepath = filepath
+        self._max_samples = max_samples
 
         super().__init__()
 
@@ -46,9 +50,15 @@ class TabularDataLoaderModule(ModelPipelineStep):
             console.section(title="Loading tabular data")
             logger.info(f"Loading from: {self._filepath}")
 
-        result = {
-            "dataframe": pd.read_csv(self._filepath),
-        }
+        df = pd.read_csv(self._filepath)
+        
+        # Apply max_samples limit if specified
+        if self._max_samples is not None:
+            df = df.head(self._max_samples)
+            if verbose:
+                logger.info(f"Limited to {self._max_samples} samples")
+
+        result = {"dataframe": df}
 
         if verbose:
             logger.info(
