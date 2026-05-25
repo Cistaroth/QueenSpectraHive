@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).parents[2]))
 from pipeline import ModelPipeline
 from modules.utils.header import HeaderModule
 from modules.data_loading.kaggle_loader import KaggleDataLoaderModule
-from modules.tabular.tabular_data_loader import TabularDataLoaderModule
+from modules.data_loading.tabular_data_loader import TabularDataLoaderModule
 from modules.tabular.tabular_utils import (
     TabularColumnDropperModule,
     TabularOneHotEncoderModule,

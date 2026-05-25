@@ -1,18 +1,19 @@
 import random
 from pathlib import Path
+from typing import cast
+
 import pandas as pd
-import soundfile as sf
 
 from pipeline import ModelPipelineStep
 from logger import console, logger
 
-class AudioSplicer(ModelPipelineStep):
+class AudioSplicerModule(ModelPipelineStep):
     name = "Audio Splicer"
 
     inputs = {"x_train", "y_train"}
     outputs = {"x_train", "y_train"}
 
-    def __init__(self, audio_path_col: str, audio_dir: Path | str | None = None, chunk_duration: int = 15) -> None:
+    def __init__(self, audio_path_col: str, audio_dir: Path, chunk_duration: int = 15) -> None:
         """
         Initializes the AudioSplicer class.
 
@@ -55,7 +56,7 @@ class AudioSplicer(ModelPipelineStep):
             logger.error(f"Error at getting splice for file at {file_path}: {e}")
             return 0, self._chunk_duration
     
-    def _slice_over_df(self, df: pd.DataFrame, real_paths: dict = {}) -> pd.DataFrame:
+    def _slice_over_df(self, df: pd.DataFrame, real_paths: dict | None = None) -> pd.DataFrame:
         """
         Iterates over the dataset to apply audio paths and coordinate offsets.
 
@@ -65,32 +66,35 @@ class AudioSplicer(ModelPipelineStep):
         Returns:
             pd.DataFrame: Mutated dataframe containing audio tracking metadata.
         """
-        for id, row in df.iterrows():
-            if pd.isna(df.at[id, self._audio_col]):
+        if real_paths is None:
+            real_paths = {}
+
+        for raw_id, row in df.iterrows():
+            id = cast(int, raw_id)
+            if pd.isna(df.loc[id, self._audio_col]):
                 options = real_paths.get(row["target"], [])
                 if options:
                     picked_path = random.choice(options)
                     df.at[id, self._audio_col] = picked_path
 
-            full_path = Path(df.at[id, self._audio_col])
+            full_path = Path(str(df.at[id, self._audio_col]))
             if self._audio_dir and not full_path.is_absolute():
                 full_path = Path(self._audio_dir) / full_path
             resolved_path_str = str(full_path)
             df.at[id, self._audio_col] = resolved_path_str
-            
+
             start, end = self._get_random_slice(resolved_path_str)
             df.at[id, "start_sec"] = start
             df.at[id, "end_sec"] = end
         return df
                 
 
-
     def run(
             self,
             x_train: pd.DataFrame,
             y_train: pd.Series,
             verbose: bool = True
-            ) -> None:
+            ) -> dict[str, pd.DataFrame | pd.Series]:
         """
         Executes randomized slicing coordinates and balances class targets.
 
@@ -99,7 +103,7 @@ class AudioSplicer(ModelPipelineStep):
             y_train (pd.Series): Training target labels.
             verbose (bool, optional): Verbose logging mode. Defaults to True.
         Returns:
-            dict[str, Any]: Dictionary containing matched multimodal sets.
+            dict[str, pd.DataFrame | pd.Series]: Dictionary containing matched multimodal sets.
         """
         if verbose:
             console.section("Handling Class Imbalance on Audio Data")

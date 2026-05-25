@@ -7,7 +7,7 @@ from logger import console, logger
 
 class TabularDataLoaderModule(ModelPipelineStep):
     name = "TabularDataLoader"
-    inputs = {}
+    inputs = set()
     outputs = {"dataframe"}
 
     def __init__(
@@ -33,14 +33,14 @@ class TabularDataLoaderModule(ModelPipelineStep):
     def run(
         self,
         verbose: bool = True,
-    ) -> None:
+    ) -> dict[str, pd.DataFrame]:
         """
         Loads the tabular data
 
         Args:
             verbose (bool, optional): Verbose mode. Defaults to True.
         Returns:
-            None
+            dict[str, pd.DataFrame]: Dictionary containing the loaded dataframe.
         """
         if verbose:
             console.section(title="Loading tabular data")

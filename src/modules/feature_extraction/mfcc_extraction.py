@@ -6,7 +6,7 @@ from pipeline import ModelPipelineStep
 from logger import console, logger
 
 
-class MFCCExtractor(ModelPipelineStep):
+class MFCCExtractorModule(ModelPipelineStep):
     """
     Slices raw PyTorch waveforms by physical time boundaries 
     and extracts Mel-Frequency Cepstral Coefficients (MFCCs).
@@ -45,7 +45,7 @@ class MFCCExtractor(ModelPipelineStep):
             dict[str, Any]: Dictionary containing the output 'mfcc' tensor.
         """
         if verbose:
-            logger.info("Extracting MFCC Audio Vectors")
+            console.section("Extracting MFCC Audio Vectors")
 
         try:
             mfcc_transform = T.MFCC(
@@ -57,7 +57,7 @@ class MFCCExtractor(ModelPipelineStep):
             mfcc_data = mfcc_transform(waveform)
 
             if verbose:
-                logger.info(f"Successfully processed segment.")
+                logger.info("Successfully processed segment.")
                 logger.info(f"Generated MFCC array shape: {mfcc_data.shape}")
 
             return {"mfcc": mfcc_data}
