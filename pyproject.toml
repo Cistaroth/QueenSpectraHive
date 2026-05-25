@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "dotenv>=0.9.9",
     "fastapi>=0.136.1",
+    "imblearn>=0.0",
     "kagglehub>=1.0.1",
     "matplotlib>=3.10.9",
     "pandas>=3.0.2",
@@ -17,5 +18,8 @@ dependencies = [
     "rich>=15.0.0",
     "scikit-learn>=1.8.0",
     "seaborn>=0.13.2",
+    "soundfile>=0.13.1",
+    "torch>=2.12.0",
+    "torchaudio>=2.11.0",
     "uvicorn>=0.47.0",
 ]
