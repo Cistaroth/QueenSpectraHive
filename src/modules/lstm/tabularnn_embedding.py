@@ -35,6 +35,8 @@ class TabularNNEmbeddingsModule(TrainerBase):
         if verbose:
             logger.info("Finished generating tabular embeddings.")
 
+        print(tabular_embedding)
+
         return {"tabular_embedding": tabular_embedding}
 
     def train(self, x_train: pd.DataFrame, y_train: pd.DataFrame) -> torch.Tensor:

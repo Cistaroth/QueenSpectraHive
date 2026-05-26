@@ -16,11 +16,15 @@ from models.lstm.settings import (
     TIME_COLUMN,
     TIME_FEATURES,
     ONEHOT_COLUMNS,
-    IMPUTE_COLUMNS
+    IMPUTE_COLUMNS,
+    TARGET_COLUMN,
+    TRAIN_TEST_SPLIT,
+    SEED,
+    AUDIO_DIR,
+    AUDIO_PATH_COL,
+    CHUNK_DURATION
 )
-from modules.data_loading.audio_data_loader import (
-    AudioDataLoaderModule,
-)
+
 from modules.data_loading.kaggle_loader import KaggleDataLoaderModule
 from modules.data_loading.tabular_data_loader import TabularDataLoaderModule
 from modules.feature_extraction.mfcc_extraction import MFCCExtractorModule
@@ -39,6 +43,7 @@ from modules.tabular.tabular_utils import (
 from modules.utils.header import HeaderModule
 from pipeline import ModelPipeline
 
+from modules.data_augmentation.audio_splicing import AudioSplicerModule
 from modules.lstm.tabularnn_embedding import TabularNNEmbeddingsModule
 
 
@@ -53,7 +58,7 @@ Finally, we concatonate both of these to give us a final prediction. To be fair 
 
 
 def main():
-    pipeline = ModelPipeline(
+    ModelPipeline(
         steps=[
             HeaderModule(task=TASK_NAME),
             KaggleDataLoaderModule(
@@ -63,7 +68,6 @@ def main():
             # Load tabular data
             TabularDataLoaderModule(filepath=CSV_FILEPATH),
             # Load audio data
-            AudioDataLoaderModule(filepath=SOUND_FILEPATH),
             TabularColumnDropperModule(drop_columns=DROP_COLUMNS),
             # Extract time features
             TabularTimeColumnEncoderModule(
@@ -75,11 +79,31 @@ def main():
             TabularOneHotEncoderModule(columns_to_encode=ONEHOT_COLUMNS),
             # Mean impute missing values
             TabularColumnMeanImputerModule(impute_columns=IMPUTE_COLUMNS),
-            # 
-            TabularNNEmbeddingsModule(NN_ARCHITECTURE),
-        ],
-    )
+            # Split features and target
+            TabularFeatureTargetSplitterModule(target_column=TARGET_COLUMN),
+            # Train-test split
+            TabularTrainTestSplitterModule(
+                train_test_split=TRAIN_TEST_SPLIT,
+                random_state=SEED,
+            ),
 
+            # Obtain the NN embeddings
+            TabularNNEmbeddingsModule(*NN_ARCHITECTURE),
+
+            #Get the audio files and stuff
+            AudioSplicerModule(
+                audio_path_col=AUDIO_PATH_COL,
+                audio_dir=AUDIO_DIR,
+                chunk_duration=CHUNK_DURATION,
+            ),
+        ],
+    ).run()
+
+if __name__ == "__main__":
+    main()
+
+
+"""
     history = pipeline.run()
     dataset = history[-1].output["dataset"]
 
@@ -119,7 +143,4 @@ def main():
     output_image_path = Path(__file__).parents[2] / "plots" / "audio_test_verification.png"
     plt.savefig(output_image_path, dpi=150)
     print(f"Success! Plot saved cleanly to: {output_image_path}")
-
-
-if __name__ == "__main__":
-    main()
+"""

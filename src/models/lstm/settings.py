@@ -1,6 +1,8 @@
 from pathlib import Path
+
 import torch.nn as nn
 
+from config import config
 
 TASK_NAME = "LSTM"
 
@@ -20,7 +22,7 @@ IMPUTE_COLUMNS = ["wind speed", "weather temp"]
 
 TARGET_COLUMN = "queen presence"
 
-NN_ARCHITECTURE = nn.Linear(14, 64),nn.ReLU(),nn.Linear(64, 32) #14 features INCLUDING Y_train
+NN_ARCHITECTURE = (nn.Linear(21, 64), nn.ReLU(), nn.Linear(64, 32))  # 14 features INCLUDING Y_train
 
 DROP_COLUMNS: list[str] = [
     "weatherID",
@@ -37,13 +39,15 @@ DROP_COLUMNS: list[str] = [
 # device,hive number,date,hive temp,hive humidity,hive pressure,weather temp,weather humidity,weather pressure,wind speed,gust speed,cloud coverage,queen presence,frames
 TIME_COLUMN: str = "date"
 
-TIME_FEATURES: list[str] = [
-    "hour",
-    "minute",
-    "day",
-    "day_of_week",
-    "week_of_year"
-]
+TIME_FEATURES: list[str] = ["hour", "minute", "day", "day_of_week", "week_of_year"]
+
+TARGET_COLUMN: str = "queen presence"
 ONEHOT_COLUMNS: list[str] = ["device", "hive number"]
 IMPUTE_COLUMNS: list[str] = ["wind speed", "weather temp"]
 TARGET_COLUMN: str = "queen presence"
+SEED: int = config.SEED
+TRAIN_TEST_SPLIT: float = config.TRAIN_TEST_SPLIT
+
+AUDIO_PATH_COL: str = "file name"
+AUDIO_DIR: Path = OUTPUT_DIR / "sound_files" / "sound_files"
+CHUNK_DURATION: int = 15  # 15 seconds per slice
