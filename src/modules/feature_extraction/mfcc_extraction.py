@@ -5,7 +5,6 @@ from typing import Any
 from pipeline import ModelPipelineStep
 from logger import console, logger
 
-
 class MFCCExtractorModule(ModelPipelineStep):
     """
     Slices raw PyTorch waveforms by physical time boundaries 
