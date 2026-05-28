@@ -1,3 +1,26 @@
+"""
+THIS FILE IS DEPRECIATED, I THINK YOU CAN DELETE OR IGNORE IT, THE ACTUAL TABULARNN TRAINING HAPPENS IN
+COMPOSITE_MODEL_MODULE.py!!!!!!!!!!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"""
+
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -37,7 +60,6 @@ class TabularNNEmbeddingsModule(TrainerBase):
 
         if verbose:
             logger.info("Finished generating tabular embeddings.")
-
 
         return {"tabular_embedding": tabular_embedding}
 

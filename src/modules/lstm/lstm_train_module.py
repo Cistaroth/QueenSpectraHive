@@ -1,3 +1,28 @@
+"""
+THIS FILE IS DEPRECIATED, I THINK YOU CAN DELETE OR IGNORE IT, THE ACTUAL LSTM TRAINING HAPPENS IN 
+COMPOSITE_MODEL_MODULE.py!!!!!!!!!!
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"""
+
+
+
 import random
 from pathlib import Path
 from typing import Any
