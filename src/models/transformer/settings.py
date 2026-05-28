@@ -54,7 +54,7 @@ class AudioTransformerSettings(BaseModel):
     ]
 
     TRAIN_TEST_SPLIT: float = config.TRAIN_TEST_SPLIT
-    MAX_SAMPLES: int | None = 10   #! set max samples to 10 for testing, change 10 to None for full dataset
+    MAX_SAMPLES: int | None = None   #! set max samples to 10 for testing, change 10 to None for full dataset
 
     CHUNK_DURATION: int = 15           # seconds per slice
 

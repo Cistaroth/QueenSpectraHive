@@ -56,7 +56,7 @@ class AudioSplicerModule(ModelPipelineStep):
             logger.error(f"Error at getting splice for file at {file_path}: {e}")
             return 0, self._chunk_duration
     
-    def _slice_over_df(self, df: pd.DataFrame, real_paths: dict | None = None) -> pd.DataFrame:
+    def _slice_over_df(self, df: pd.DataFrame,  existing_stems: set, real_paths: dict | None = None) -> pd.DataFrame:
         """
         Iterates over the dataset to apply audio paths and coordinate offsets.
 
@@ -71,7 +71,7 @@ class AudioSplicerModule(ModelPipelineStep):
 
         for raw_id, row in df.iterrows():
             id = cast(int, raw_id)
-            if pd.isna(df.loc[id, self._audio_col]):
+            if pd.isna(df.loc[id, self._audio_col]) or Path(df.loc[id, self._audio_col]).stem not in existing_stems:
                 options = real_paths.get(row["target"], [])
                 if options:
                     picked_path = random.choice(options)
@@ -107,6 +107,13 @@ class AudioSplicerModule(ModelPipelineStep):
         """
         if verbose:
             console.section("Handling Class Imbalance on Audio Data")
+            logger.info(f"Indexing existing audio files inside {self._audio_dir}")
+        
+        # check existing files
+        existing_stems = set()
+        for p in self._audio_dir.glob("*__segment*.wav"):
+            file_stem = p.name.split("__segment")[0]
+            existing_stems.add(file_stem)
 
         df_x = x_train.copy()
         df_x["target"] = y_train
@@ -116,8 +123,11 @@ class AudioSplicerModule(ModelPipelineStep):
         # check if smote ran previously
         smote_check = df_x[self._audio_col].isna().any()
 
-        # save the real paths so synthetic rows can access them
-        real_rows = df_x[df_x[self._audio_col].notna()].copy()
+        # save the real and existing paths so synthetic rows can access them
+        real_rows = df_x[
+            df_x[self._audio_col].notna() & 
+            df_x[self._audio_col].apply(lambda x: Path(str(x)).stem in existing_stems)
+            ].copy()
         real_paths = real_rows.groupby("target")[self._audio_col].apply(list).to_dict()
 
         if smote_check:
@@ -140,7 +150,7 @@ class AudioSplicerModule(ModelPipelineStep):
                 synthetic_rows = minority_pool.sample(difference, replace=True).copy()
                 df_x = pd.concat([df_x, synthetic_rows], ignore_index=True)
         
-        df_x = self._slice_over_df(df_x, real_paths)
+        df_x = self._slice_over_df(df_x, existing_stems, real_paths)
         df_x = df_x.sample(frac=1).reset_index(drop=True)
 
         x_resampled = df_x.drop(columns=["target"])
