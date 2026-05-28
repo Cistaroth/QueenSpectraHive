@@ -47,15 +47,15 @@ class AudioSplicerModule(ModelPipelineStep):
 
             if total_duration < self._chunk_duration:
                 return 0, total_duration
-            
-            
+
+
             max_start = total_duration - self._chunk_duration
             start_point = round(random.uniform(0, max_start))
             return start_point, start_point + self._chunk_duration
         except Exception as e:
             logger.error(f"Error at getting splice for file at {file_path}: {e}")
             return 0, self._chunk_duration
-    
+
     def _slice_over_df(self, df: pd.DataFrame,  existing_stems: set, real_paths: dict | None = None) -> pd.DataFrame:
         """
         Iterates over the dataset to apply audio paths and coordinate offsets.
@@ -87,7 +87,7 @@ class AudioSplicerModule(ModelPipelineStep):
             df.at[id, "start_sec"] = start
             df.at[id, "end_sec"] = end
         return df
-                
+
 
     def run(
             self,
@@ -108,7 +108,7 @@ class AudioSplicerModule(ModelPipelineStep):
         if verbose:
             console.section("Handling Class Imbalance on Audio Data")
             logger.info(f"Indexing existing audio files inside {self._audio_dir}")
-        
+
         # check existing files
         existing_stems = set()
         for p in self._audio_dir.glob("*__segment*.wav"):
@@ -125,7 +125,7 @@ class AudioSplicerModule(ModelPipelineStep):
 
         # save the real and existing paths so synthetic rows can access them
         real_rows = df_x[
-            df_x[self._audio_col].notna() & 
+            df_x[self._audio_col].notna() &
             df_x[self._audio_col].apply(lambda x: Path(str(x)).stem in existing_stems)
             ].copy()
         real_paths = real_rows.groupby("target")[self._audio_col].apply(list).to_dict()
@@ -149,12 +149,12 @@ class AudioSplicerModule(ModelPipelineStep):
                 minority_pool = df_x[df_x["target"] == min_class]
                 synthetic_rows = minority_pool.sample(difference, replace=True).copy()
                 df_x = pd.concat([df_x, synthetic_rows], ignore_index=True)
-        
+
         df_x = self._slice_over_df(df_x, existing_stems, real_paths)
         df_x = df_x.sample(frac=1).reset_index(drop=True)
 
         x_resampled = df_x.drop(columns=["target"])
-        y_resampled = df_x["target"]        
+        y_resampled = df_x["target"]
 
         if verbose:
             logger.info(f"Finished resampling of audio data. \n"
