@@ -4,6 +4,8 @@ import torch.nn as nn
 
 from config import config
 
+from modules.hyperparameter_tuning.configuration import FineTuningConfiguration
+
 TASK_NAME = "LSTM"
 
 DATASET_HANDLE = "annajyang/beehive-sounds"
@@ -24,12 +26,15 @@ TARGET_COLUMN = "queen presence"
 
 NN_ARCHITECTURE = (nn.Linear(21, 64), nn.ReLU(), nn.Linear(64, 32))  # 14 features INCLUDING Y_train
 
+LSTM_ARCHITECTURE = (64, 128, 2, 0.3)  # Seq_input_size, lstm_hidden_size, lstm_num_layers, lstm_dropout
+
+CLASSIFICATION_HIDDEN_SIZE = 64
+
 DROP_COLUMNS: list[str] = [
     "weatherID",
     "lat",
     "long",
     "rain",
-    "file name",
     "queen acceptance",
     "target",
     "queen status",
@@ -51,3 +56,20 @@ TRAIN_TEST_SPLIT: float = config.TRAIN_TEST_SPLIT
 AUDIO_PATH_COL: str = "file name"
 AUDIO_DIR: Path = OUTPUT_DIR / "sound_files" / "sound_files"
 CHUNK_DURATION: int = 15  # 15 seconds per slice
+
+
+HYPERPARAMETER_SETTINGS: FineTuningConfiguration = FineTuningConfiguration(
+    model_name="LSTM-pre fusion",
+    model_train=TransformerTrainModule,
+    model_inference=TransformerInferenceModule,
+    transformer=AudioPassthroughTransformer,  #Scaler, not actual transformer 
+    model_hyperparameters={
+        "audio_dir":      [str(AUDIO_DIR)],
+        "audio_path_col": ["file name"],
+        "num_classes":    [2],
+        "epochs":         [7], #! short epochs for testing
+        "batch_size":     [2],
+        "learning_rate":  [1e-4],
+    },
+    metric="accuracy",
+)

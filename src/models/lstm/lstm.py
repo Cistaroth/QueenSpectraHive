@@ -6,28 +6,34 @@ import matplotlib.pyplot as plt
 sys.path.append(str(Path(__file__).parents[2]))
 
 from models.lstm.settings import (
-    CSV_FILEPATH,
-    DATASET_HANDLE,
-    OUTPUT_DIR,
-    SOUND_FILEPATH,
-    TASK_NAME,
-    NN_ARCHITECTURE,
-    DROP_COLUMNS,
-    TIME_COLUMN,
-    TIME_FEATURES,
-    ONEHOT_COLUMNS,
-    IMPUTE_COLUMNS,
-    TARGET_COLUMN,
-    TRAIN_TEST_SPLIT,
-    SEED,
     AUDIO_DIR,
     AUDIO_PATH_COL,
-    CHUNK_DURATION
+    CHUNK_DURATION,
+    CSV_FILEPATH,
+    DATASET_HANDLE,
+    DROP_COLUMNS,
+    HYPERPARAMETER_SETTINGS,
+    IMPUTE_COLUMNS,
+    LSTM_ARCHITECTURE,
+    NN_ARCHITECTURE,
+    ONEHOT_COLUMNS,
+    OUTPUT_DIR,
+    SEED,
+    SOUND_FILEPATH,
+    TARGET_COLUMN,
+    TASK_NAME,
+    TIME_COLUMN,
+    TIME_FEATURES,
+    TRAIN_TEST_SPLIT,
+    CLASSIFICATION_HIDDEN_SIZE
 )
-
+from modules.data_augmentation.audio_splicing import AudioSplicerModule
 from modules.data_loading.kaggle_loader import KaggleDataLoaderModule
 from modules.data_loading.tabular_data_loader import TabularDataLoaderModule
 from modules.feature_extraction.mfcc_extraction import MFCCExtractorModule
+from modules.hyperparameter_tuning.hyperparameter_tuning import HyperparameterTuningStratifiedKFoldModule
+from modules.lstm.composite_model_module import CompositeModelModule
+from modules.lstm.tabularnn_embedding import TabularNNEmbeddingsModule
 from modules.tabular.tabular_feature_extractor import (
     TabularTimeColumnEncoderModule,
 )
@@ -43,18 +49,15 @@ from modules.tabular.tabular_utils import (
 from modules.utils.header import HeaderModule
 from pipeline import ModelPipeline
 
-from modules.data_augmentation.audio_splicing import AudioSplicerModule
-from modules.lstm.tabularnn_embedding import TabularNNEmbeddingsModule
 
 
-
-'''
+"""
 So the main idea for the LSTM is to firstly, run the Mel spectrograms through the LSTM to get a audio summary vector
 Then, we combine these with the tabular data ran through a Feed forwards neural network. You can't really pass tabular
 data alongside audio data in a LSTM because the tabular data does not change with time but the audio does so it will get confused.
 
 Finally, we concatonate both of these to give us a final prediction. To be fair it is kind of like an ensamble, anyways.
-'''
+"""
 
 
 def main():
@@ -86,24 +89,41 @@ def main():
                 train_test_split=TRAIN_TEST_SPLIT,
                 random_state=SEED,
             ),
-
-            # Obtain the NN embeddings
-            TabularNNEmbeddingsModule(*NN_ARCHITECTURE),
-
-            #Get the audio files and stuff
+            # Get the audio files and stuff
             AudioSplicerModule(
                 audio_path_col=AUDIO_PATH_COL,
                 audio_dir=AUDIO_DIR,
                 chunk_duration=CHUNK_DURATION,
             ),
+
+            CompositeModelModule(DROP_COLUMNS, NN_ARCHITECTURE, LSTM_ARCHITECTURE, CLASSIFICATION_HIDDEN_SIZE, SOUND_FILEPATH, 40),
+
+            HyperparameterTuningStratifiedKFoldModule(
+                model_configuration=HYPERPARAMETER_SETTINGS,
+            ),
         ],
     ).run()
+
 
 if __name__ == "__main__":
     main()
 
 
 """
+
+.set_dependency(["y_train", "x_train"], -2)
+
+
+            # Obtain the NN embeddings
+            TabularNNEmbeddingsModule(drop_column="file name", layers=NN_ARCHITECTURE),
+
+
+
+
+
+
+
+
     history = pipeline.run()
     dataset = history[-1].output["dataset"]
 
