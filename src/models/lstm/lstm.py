@@ -25,12 +25,12 @@ from models.lstm.settings import (
     TIME_COLUMN,
     TIME_FEATURES,
     TRAIN_TEST_SPLIT,
+    HYPERPARAMETER_SETTINGS
 )
 from modules.data_augmentation.audio_splicing import AudioSplicerModule
 from modules.data_loading.kaggle_loader import KaggleDataLoaderModule
 from modules.data_loading.tabular_data_loader import TabularDataLoaderModule
 #from modules.hyperparameter_tuning.hyperparameter_tuning import HyperparameterTuningStratifiedKFoldModule
-from modules.lstm.composite_model_module import CompositeModelModule
 from modules.tabular.tabular_feature_extractor import (
     TabularTimeColumnEncoderModule,
 )
@@ -45,6 +45,7 @@ from modules.tabular.tabular_utils import (
 )
 from modules.utils.header import HeaderModule
 from pipeline import ModelPipeline
+from modules.hyperparameter_tuning.hyperparameter_tuning import HyperparameterTuningStratifiedKFoldModule
 
 """
 So the main idea for the LSTM is to firstly, run the Mel spectrograms through the LSTM to get a audio summary vector
@@ -90,10 +91,10 @@ def main():
                 audio_dir=AUDIO_DIR,
                 chunk_duration=CHUNK_DURATION,
             ),
-            CompositeModelModule(
-                ["file name", "start_sec", "end_sec"], NN_ARCHITECTURE, LSTM_ARCHITECTURE, CLASSIFICATION_HIDDEN_SIZE, SOUND_FILEPATH, 40, 5, 2, 1e-4, 0, config.SEED
-            ),
 
+            HyperparameterTuningStratifiedKFoldModule(
+                model_configuration=HYPERPARAMETER_SETTINGS,
+            )
         ],
     ).run()
 

@@ -3,10 +3,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from modules.hyperparameter_tuning.hyperparameter_tuning import FineTuningConfiguration
-from modules.transformer.transformer_train import (
-    TransformerTrainModule,
-    AudioPassthroughTransformer,
-)
+from modules.transformer.transformer_train import TransformerTrainModule
 from modules.transformer.transformer_inference import TransformerInferenceModule
 from config import config
 
@@ -63,13 +60,12 @@ class AudioTransformerSettings(BaseModel):
         model_name="Pretrained Audio Spectrogram Transformer",
         model_train=TransformerTrainModule,
         model_inference=TransformerInferenceModule,
-        transformer=AudioPassthroughTransformer,  
         model_hyperparameters={
             "audio_dir":      [str(AUDIO_DIR)],
             "audio_path_col": ["file name"],
             "num_classes":    [2],
             "pretrained_model": ["MIT/ast-finetuned-audioset-10-10-0.4593"],
-            "epochs":         [7], #! short epochs for testing
+            "epochs":         [7],
             "batch_size":     [2],
             "learning_rate":  [1e-4],
         },

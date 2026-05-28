@@ -10,7 +10,8 @@ from torch.utils.data import DataLoader
 from modules.model_bases import InferencerBase
 from logger import console, logger
 
-from modules.transformer.transformer_train import AudioTransformer, BeeAudioDataset
+from modules.transformer.transformer_train import AudioTransformer
+from torch_datasets.transformer_dataset import TransformerBeeAudioDataset
 
 
 class TransformerInferenceModule(InferencerBase):
@@ -65,7 +66,7 @@ class TransformerInferenceModule(InferencerBase):
 
     
     def _build_loader(self, x_test: pd.DataFrame, y_test: pd.Series) -> DataLoader:
-        dataset = BeeAudioDataset(
+        dataset = TransformerBeeAudioDataset(
             df=x_test,
             labels=y_test,
             audio_dir=self._audio_dir,

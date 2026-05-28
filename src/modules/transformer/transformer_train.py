@@ -1,158 +1,17 @@
 import random
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from transformers import ASTForAudioClassification, ASTFeatureExtractor
 
-from modules.model_bases import TrainerBase, TransformBase
-from modules.data_loading.audio_data_loader import LazyAudioDataset, AudioDataLoaderModule
-# Removed MFCCExtractorModule import
+from modules.model_bases import TrainerBase
+from modules.transformer.transformer_model import AudioTransformer
+from torch_datasets.transformer_dataset import TransformerBeeAudioDataset
+
 from logger import console, logger
-
-
-
-class AudioPassthroughTransformer(TransformBase):
-    """
-    Identity transformer required by FineTuningConfiguration.
-
-    The audio pipeline needs no tabular scaling; this no-op satisfies the
-    interface so HyperparameterTuningStratifiedKFoldModule can call
-    cfg.transformer.__name__ and transformer.fit_transform() without error.
-    """
-
-    name = "AudioPassthroughTransformer"
-    inputs: set[str] = set()
-    outputs: set[str] = set()
-
-    def run(self, *args: Any, **kwargs: Any) -> None:  # noqa: D102
-        return None
-
-    def fit_transform(self, x: Any) -> Any:  # noqa: D102
-        return x
-
-    def transform(self, x: Any) -> Any:  # noqa: D102
-        return x
-
-
-
-
-class BeeAudioDataset(LazyAudioDataset):
-    """
-    PyTorch dataset that wraps LazyAudioDataset and applies AST Feature Extraction for log-mel spectrograms.
-
-    """
-
-    TARGET_SR: int = 16000
-
-    def __init__(
-        self,
-        df: pd.DataFrame,
-        labels: pd.Series,
-        audio_dir: Path,
-        pretrained_model: str,
-    ) -> None:
-        """
-
-        Args:
-            df (pd.DataFrame): DataFrame with audio metadata (file name, start_sec, end_sec).
-            labels (pd.Series): Target labels for each sample.
-            audio_dir (Path): Directory containing audio segment files.
-            pretrained_model (str): Hugging Face model identifier for the feature extractor.
-        """
-        self._labels = labels.reset_index(drop=True)
-        self._audio_dir = Path(audio_dir)
-
-        loader_module = AudioDataLoaderModule(
-            filepath=self._audio_dir,
-            sample_rate=self.TARGET_SR,
-        )
-        self._lazy_dataset = loader_module.run(dataframe=df, verbose=True)["dataset"]
-
-       
-        self._feature_extractor = ASTFeatureExtractor.from_pretrained(pretrained_model)
-
-    def __len__(self) -> int:
-        return len(self._lazy_dataset)
-
-    def __getitem__(self, idx: int):
-        """
-        Get a sample: waveform → ASTFeatureExtractor → Log-mel Spectrogram tensor + label.
-        """
-        label = int(self._labels.iloc[idx])
-
-        try:
-            # Get waveform from LazyAudioDataset via AudioDataLoaderModule (shape: [channels, time])
-            waveform = self._lazy_dataset[idx]
-            logger.debug(f"Loaded waveform at index {idx} with shape {waveform.shape} and dtype {waveform.dtype}")
-            if not isinstance(waveform, torch.Tensor):
-                waveform = torch.tensor(waveform)
-        except Exception as e:
-            logger.warning(f"Failed to load waveform at index {idx}: {e}. Using silence.")
-            waveform = torch.zeros((1, self.TARGET_SR * 15))
-
-        # Extract features using ASTFeatureExtractor
-        try:
-            # Squeeze to get a 1D vector y
-            if waveform.dim() > 1:
-                waveform = waveform.mean(dim=0)
-            
-            waveform_np = waveform.numpy()
-
-            #  yields a dict containing 'input_values'
-            encoded_features = self._feature_extractor(
-                waveform_np, 
-                sampling_rate=self.TARGET_SR, 
-                return_tensors="pt"
-            )
-            features = encoded_features["input_values"].squeeze(0)
-
-        except Exception as e:
-            logger.warning(f"AST feature extraction failed at index {idx}: {e}")
-            # Fallback tensor for AST 
-            features = torch.zeros((1024, 128))
-
-        return features, label
-
-
-
-class AudioTransformer(nn.Module):
-    """
-
-    This model loads a pretrained AST checkpoint from Hugging Face and adapts it
-    for two classes for on bee audio data.
-    """
-
-    def __init__(
-        self,
-        num_classes: int = 2,
-        pretrained_model: str = "MIT/ast-finetuned-audioset-10-10-0.4593",
-    ) -> None:
-        super().__init__()
-
-        self.ast = ASTForAudioClassification.from_pretrained(
-            pretrained_model,
-            num_labels=num_classes,
-            ignore_mismatched_sizes=True,
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass through the pretrained AST model.
-
-        Args:
-            x (torch.Tensor): Log-mel features of shape (B, time_frames, num_mel_bins).
-        Returns:
-            torch.Tensor: Logits of shape (B, num_classes).
-        """
-        outputs = self.ast(x)
-        return outputs.logits
-
-
 
 class TransformerTrainModule(TrainerBase):
     """
@@ -160,7 +19,7 @@ class TransformerTrainModule(TrainerBase):
     """
 
     name = "TransformerTraining"
-    inputs = {"x_train", "y_train"}
+    inputs = {"x_train", "y_train", "x_val", "y_val"}
     outputs = {"model"}
 
     def __init__(
@@ -175,7 +34,27 @@ class TransformerTrainModule(TrainerBase):
         audio_path_col: str = "path",
         device: str | None = None,
         seed: int = 42,
+        save_path: Path | None = Path(__file__).parents[3] / "trained_models" / "transformer",
     ) -> None:
+        """
+        Initialize the step.
+
+        Args:
+            audio_dir (Path | str): Path to the directory containing the audio files.
+            num_classes (int): Number of classes.
+            pretrained_model (str): Hugging Face model ID for AST feature extractor.
+            epochs (int): Number of epochs.
+            batch_size (int): Batch size.
+            learning_rate (float): Learning rate.
+            num_workers (int): Number of workers for data loading.
+            audio_path_col (str): Name of the column containing the audio file paths.
+            device (str | None, optional): Device to train on. Defaults to None.
+            seed (int, optional): Random seed for reproducibility. Defaults to 42.
+            save_path (Path, optional): Path to save the fine-tuned model. Defaults to default save path.
+        
+        Returns:
+            None
+        """
         super().__init__()
 
         self._audio_dir = Path(audio_dir)
@@ -187,6 +66,7 @@ class TransformerTrainModule(TrainerBase):
         self._num_workers = num_workers
         self._audio_path_col = audio_path_col 
         self._seed = seed
+        self._save_path = save_path
 
         if device is None:
             if torch.cuda.is_available():
@@ -199,30 +79,94 @@ class TransformerTrainModule(TrainerBase):
             self._device = torch.device(device)
 
     def _set_seed(self) -> None:
+        """
+        Set the random seed for reproducibility.
+
+        Returns:
+            None
+        """
         random.seed(self._seed)
         np.random.seed(self._seed)
         torch.manual_seed(self._seed)
         if self._device.type == "cuda":
             torch.cuda.manual_seed_all(self._seed)
 
+    def _save_model(self, model: AudioTransformer) -> None:
+        """
+        Save the fine-tuned model.
+
+        Args:
+            model (AudioTransformer): The fine-tuned model.
+        
+        Returns:
+            None
+        """
+        if not self._save_path.exists():
+            self._save_path.mkdir(parents=True)
+
+        nr = len([f for f in self._save_path.iterdir() if f.name.startswith("transformer")]) + 1
+        torch.save(model.state_dict(), self._save_path / f"transformer_{nr}.pth")
+
+    @torch.no_grad()
+    def _evaluate(self, model: AudioTransformer, loader: DataLoader, criterion: nn.Module) -> tuple[float, float]:
+        """
+        Run a single evaluation pass over a loader without updating weights.
+ 
+        Args:
+            model (AudioTransformer): The model being trained.
+            loader (DataLoader): Validation data loader.
+            criterion (nn.Module): Loss function (same as training).
+ 
+        Returns:
+            tuple[float, float]: (average loss, accuracy) over the validation set.
+        """
+        model.eval()
+        running_loss = 0.0
+        correct = 0
+        total = 0
+ 
+        for batch_features, batch_labels in loader:
+            batch_features = batch_features.to(self._device)
+            batch_labels = batch_labels.to(self._device)
+ 
+            logits = model(batch_features)
+            loss = criterion(logits, batch_labels)
+ 
+            running_loss += loss.item() * len(batch_labels)
+            preds = logits.argmax(dim=1)
+            correct += (preds == batch_labels).sum().item()
+            total += len(batch_labels)
+ 
+        return running_loss / total, correct / total
+    
     def run(
         self,
         x_train: pd.DataFrame,
         y_train: pd.Series,
+        x_val: pd.DataFrame,
+        y_val: pd.Series,
         verbose: bool = True,
     ) -> dict[str, AudioTransformer]:
         """
         Fine-tune the pretrained AudioTransformer.
+
+        Args:
+            x_train (pd.DataFrame): Training data.
+            y_train (pd.Series): Training labels.
+            verbose (bool): Whether to print training progress.
+        
+        Returns:
+            dict[str, AudioTransformer]: A dictionary containing the fine-tuned model.
         """
         self._set_seed()
 
         if verbose:
-            console.section("Fine-tuning Pretrained Audio Spectrogram Transformer")
+            console.section("Pretrained Audio Spectrogram Transformer")
             logger.info(f"Samples: {len(x_train):,}  |  Classes: {self._num_classes}")
             logger.info(f"Pretrained Model: {self._pretrained_model}")
-            print(f"\n[TransformerTraining]  Total training samples after splicing: {len(x_train):,}\n")
+            logger.info(f"\n[TransformerTraining]  Total training samples after splicing: {len(x_train):,}\n")
 
-        dataset = BeeAudioDataset(
+        dataset = TransformerBeeAudioDataset(
             df=x_train,
             labels=y_train,
             audio_dir=self._audio_dir,  
@@ -232,6 +176,21 @@ class TransformerTrainModule(TrainerBase):
             dataset,
             batch_size=self._batch_size,
             shuffle=True,
+            num_workers=self._num_workers,
+            pin_memory=(self._device.type == "cuda"),
+        )
+
+        val_dataset = TransformerBeeAudioDataset(
+            df=x_val,
+            labels=y_val,
+            audio_dir=self._audio_dir,
+            pretrained_model=self._pretrained_model,
+        )
+
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=self._batch_size,
+            shuffle=False,
             num_workers=self._num_workers,
             pin_memory=(self._device.type == "cuda"),
         )
@@ -280,15 +239,20 @@ class TransformerTrainModule(TrainerBase):
 
             epoch_loss = running_loss / total
             epoch_acc = correct / total
+            
+            val_loss, val_acc = self._evaluate(model, val_loader, criterion)
 
             if verbose:
                 logger.info(
                     f"Epoch completed [{epoch:>3}/{self._epochs}]  "
-                    f"loss={epoch_loss:.4f}  acc={epoch_acc:.4f}"
+                    f"loss={epoch_loss:.4f}  acc={epoch_acc:.4f}    "
+                    f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}"
                 )
 
         if verbose:
             logger.info("Finished fine-tuning Audio Spectrogram Transformer.")
+
+        self._save_model(model)
 
         return {"model": model}
 
@@ -296,8 +260,17 @@ class TransformerTrainModule(TrainerBase):
         self,
         x_train: pd.DataFrame,
         y_train: pd.Series,
+        x_val: pd.DataFrame,
+        y_val: pd.Series
     ) -> AudioTransformer:
         """
         Fine-tune and return the model without pipeline scaffolding.
+
+        Args:
+            x_train (pd.DataFrame): Training data.
+            y_train (pd.Series): Training labels.
+
+        Returns:
+            AudioTransformer
         """
-        return self.run(x_train=x_train, y_train=y_train, verbose=True)["model"]
+        return self.run(x_train=x_train, y_train=y_train, x_val=x_val, y_val=y_val, verbose=False)["model"]

@@ -43,3 +43,6 @@ logging.basicConfig(
 
 logger = logging.getLogger()
 
+logging.getLogger("httpx").setLevel(logging.WARNING)  
+
+

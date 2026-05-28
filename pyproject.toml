@@ -9,6 +9,7 @@ dependencies = [
     "fastapi>=0.136.1",
     "imblearn>=0.0",
     "kagglehub>=1.0.1",
+    "kagglesdk==0.1.23",
     "matplotlib>=3.10.9",
     "pandas>=3.0.2",
     "pydantic>=2.13.4",

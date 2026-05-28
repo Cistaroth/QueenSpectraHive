@@ -265,7 +265,7 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
 
                         # Train the model on the training fold and evaluate on the validation fold
                         trainer = cfg.model_train(**model_parameter)
-                        model = trainer.train(x_train_transformed, y_train_fold)
+                        model = trainer.train(x_train_transformed, y_train_fold, x_val_transformed, y_val_fold)
 
                         inferencer = cfg.model_inference()
                         y_pred = inferencer.inference(model, x_val_transformed)

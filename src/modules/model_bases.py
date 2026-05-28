@@ -5,7 +5,7 @@ from pipeline import ModelPipelineStep
 
 class TrainerBase(ModelPipelineStep):
     @abstractmethod
-    def train(self, x_train, y_train) -> Any:
+    def train(self, x_train, y_train, x_val, y_val) -> Any:
         pass
 
 class InferencerBase(ModelPipelineStep):

@@ -6,17 +6,13 @@ import torch
 from torch.utils.data import DataLoader
 
 from logger import console, logger
-from modules.lstm.composite_model_module import BeeAudioDataset, CompositeModel
+from modules.lstm.lstm_model import FusionLSTMModel
 from modules.model_bases import InferencerBase
+from torch_datasets.lstm_dataset import LSTMBeeAudioDataset
 
 
-class LstmInferenceModule(InferencerBase):
-    """
-    #! NOT TESTED, SO I DONT KNOW IF IT RUNS WELL OR NOT
-    Pipeline that runs the inference on the LSTM fusion model.
-    """
-
-    name = "lstmInference"
+class FusionLSTMInferenceModule(InferencerBase):
+    name = "LstmInference"
     inputs = {"model", "x_test"}
     outputs = {"y_pred", "y_pred_proba"}
 
@@ -62,7 +58,7 @@ class LstmInferenceModule(InferencerBase):
             self._device = torch.device(device)
 
     def _build_loader(self, x_test: pd.DataFrame, y_test: pd.Series | None) -> DataLoader:
-        dataset = BeeAudioDataset(columns_to_drop=self._columns_to_drop, df=x_test, labels=y_test, audio_dir=self._audio_dir, n_mfcc=self._n_mfcc)
+        dataset = LSTMBeeAudioDataset(columns_to_drop=self._columns_to_drop, df=x_test, labels=y_test, audio_dir=self._audio_dir, n_mfcc=self._n_mfcc)
         return DataLoader(
             dataset,
             batch_size=self._batch_size,
@@ -73,7 +69,7 @@ class LstmInferenceModule(InferencerBase):
 
     def run(
         self,
-        model: CompositeModel,
+        model: FusionLSTMModel,
         x_test: pd.DataFrame,
         verbose: bool = True,
     ) -> dict[str, np.ndarray]:
@@ -126,7 +122,7 @@ class LstmInferenceModule(InferencerBase):
 
     def inference(
         self,
-        model: CompositeModel,
+        model: FusionLSTMModel,
         x_test: pd.DataFrame,
     ) -> np.ndarray:
         """
@@ -142,7 +138,7 @@ class LstmInferenceModule(InferencerBase):
 
     def inference_proba(
         self,
-        model: CompositeModel,
+        model: FusionLSTMModel,
         x_test: pd.DataFrame,
     ) -> np.ndarray:
         """

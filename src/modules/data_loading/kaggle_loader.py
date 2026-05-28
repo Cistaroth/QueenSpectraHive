@@ -58,7 +58,7 @@ class KaggleDataLoaderModule(ModelPipelineStep):
         
         kagglehub.dataset_download(
             handle= self._dataset_handle,
-            output_dir= str(self._output_dir),
+            output_dir= str(self._output_dir)
         )
 
         if verbose:

@@ -3,7 +3,7 @@ from itertools import product
 from typing import Any
 
 from modules.model_bases import TrainerBase, InferencerBase, TransformBase
-
+from modules.utils.passthrough_transform import PassThroughTransformModule
 
 @dataclass(frozen=True)
 class FineTuningConfiguration:
@@ -14,11 +14,11 @@ class FineTuningConfiguration:
     model_name: str
     model_train: type[TrainerBase]
     model_inference: type[InferencerBase]
-    transformer: type[TransformBase]
 
     metric: str
     folds: int = 5
 
+    transformer: type[TransformBase] = PassThroughTransformModule
     model_hyperparameters: dict[str, list[Any]] = field(default_factory=dict)
     transformer_hyperparameters: dict[str, list[Any]] = field(default_factory=dict)
 

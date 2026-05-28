@@ -3,7 +3,9 @@ from pathlib import Path
 import torch.nn as nn
 
 from config import config
-from modules.lstm.lstm_inference_module import LstmInferenceModule
+from modules.lstm.lstm_inference import FusionLSTMInferenceModule
+from modules.lstm.lstm_train import FusionLSTMTrainModule
+from modules.hyperparameter_tuning.configuration import FineTuningConfiguration
 
 
 TASK_NAME = "LSTM"
@@ -57,7 +59,23 @@ AUDIO_PATH_COL: str = "file name"
 AUDIO_DIR: Path = OUTPUT_DIR / "sound_files" / "sound_files"
 CHUNK_DURATION: int = 15  # 15 seconds per slice
 
-MODEL_INFERENCE = LstmInferenceModule
+HYPERPARAMETER_SETTINGS = FineTuningConfiguration(
+        model_name="Pretrained Audio Spectrogram Transformer",
+        model_train=FusionLSTMTrainModule,
+        model_inference=FusionLSTMInferenceModule,
+        model_hyperparameters={
+            "drop_column":    ["file name", "start_sec", "end_sec"],
+            "layers":         [NN_ARCHITECTURE],
+            "lstm_layers":    [LSTM_ARCHITECTURE],
+            "classification_hidden_size": [CLASSIFICATION_HIDDEN_SIZE],
+            "audio_dir":      [str(AUDIO_DIR)],
+            "n_mfcc":         [40],
+            "epochs":         [7],
+            "batch_size":     [2],
+            "learning_rate":  [1e-4],
+        },
+        metric="accuracy",
+    )
 
 """
 HYPERPARAMETER_SETTINGS: FineTuningConfiguration = FineTuningConfiguration(
