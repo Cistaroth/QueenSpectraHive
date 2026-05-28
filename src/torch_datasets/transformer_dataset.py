@@ -10,12 +10,12 @@ from torch_datasets.datasets_base import BeeAudioDataset
 class TransformerBeeAudioDataset(BeeAudioDataset):
     def __init__(
         self,
-        df: pd.DataFrame,
+        features: pd.DataFrame,
         labels: pd.Series,
         audio_dir: Path,
         pretrained_model: str,
     ):
-        super().__init__(df=df, labels=labels, audio_dir=audio_dir)
+        super().__init__(features=features, labels=labels, audio_dir=audio_dir)
 
         self._feature_extractor = ASTFeatureExtractor.from_pretrained(pretrained_model)
 

@@ -21,7 +21,7 @@ class TransformerInferenceModule(InferencerBase):
     """
 
     name = "TransformerInference"
-    inputs = {"model", "x_test", "y_test"}
+    inputs = {"model", "x_test"}
     outputs = {"y_pred", "y_pred_proba"}
 
     def __init__(
@@ -65,10 +65,17 @@ class TransformerInferenceModule(InferencerBase):
             self._device = torch.device(device)
 
     
-    def _build_loader(self, x_test: pd.DataFrame, y_test: pd.Series) -> DataLoader:
+    def _build_loader(self, x_test: pd.DataFrame) -> DataLoader:
+        """
+        Build the dataloader for inference.
+
+        Args:
+            x_test (pd.DataFrame) : Test features with audio metadata.
+        Returns:
+            DataLoader
+        """
         dataset = TransformerBeeAudioDataset(
-            df=x_test,
-            labels=y_test,
+            features=x_test,
             audio_dir=self._audio_dir,
             pretrained_model=self._pretrained_model,
         )
@@ -84,7 +91,6 @@ class TransformerInferenceModule(InferencerBase):
         self,
         model: AudioTransformer,
         x_test: pd.DataFrame,
-        y_test: pd.Series,
         verbose: bool = True,
     ) -> dict[str, np.ndarray]:
         """
@@ -93,12 +99,11 @@ class TransformerInferenceModule(InferencerBase):
         Args:
             model   (AudioTransformer): The fine-tuned transformer model.
             x_test  (pd.DataFrame)    : Test features with audio metadata.
-            y_test  (pd.Series)       : True labels (passed through; not used here).
             verbose (bool)            : Verbose logging. Defaults to True.
         Returns:
             dict containing:
-                y_pred       – predicted class indices  
-                y_pred_proba – probability of class 1   
+                y_pred       - predicted class indices  
+                y_pred_proba - probability of class 1   
         """
         if verbose:
             console.section("Evaluating Audio Spectrogram Transformer")
@@ -108,7 +113,7 @@ class TransformerInferenceModule(InferencerBase):
         model = model.to(self._device)
         model.eval()
 
-        loader = self._build_loader(x_test, y_test)
+        loader = self._build_loader(x_test)
 
         all_preds: list[np.ndarray] = []
         all_proba: list[np.ndarray] = []
@@ -116,12 +121,12 @@ class TransformerInferenceModule(InferencerBase):
         with torch.no_grad():
             for batch_mel, _ in loader:
                 batch_mel = batch_mel.to(self._device)
-                logits = model(batch_mel)                          # (B, C)
-                probs = torch.softmax(logits, dim=1)               # (B, C)
-                preds = probs.argmax(dim=1)                        # (B,)
+                logits = model(batch_mel)     
+                probs = torch.softmax(logits, dim=1)
+                preds = probs.argmax(dim=1)  
 
                 all_preds.append(preds.cpu().numpy())
-                all_proba.append(probs[:, 1].cpu().numpy())        # P(class=1)
+                all_proba.append(probs[:, 1].cpu().numpy())
 
         y_pred = np.concatenate(all_preds)
         y_pred_proba = np.concatenate(all_proba)
@@ -150,10 +155,7 @@ class TransformerInferenceModule(InferencerBase):
         Returns:
             np.ndarray: Predicted class indices
         """
-        # y_test is required by BeeAudioDataset but not used during inference;
-        # supply a zero-filled placeholder so the DataLoader can be built.
-        dummy_y = pd.Series(np.zeros(len(x_test), dtype=int))
-        return self.run(model=model, x_test=x_test, y_test=dummy_y, verbose=False)[
+        return self.run(model=model, x_test=x_test, verbose=False)[
             "y_pred"
         ]
 
@@ -171,7 +173,6 @@ class TransformerInferenceModule(InferencerBase):
         Returns:
             np.ndarray: Probability of class 1, shape (N,).
         """
-        dummy_y = pd.Series(np.zeros(len(x_test), dtype=int))
-        return self.run(model=model, x_test=x_test, y_test=dummy_y, verbose=False)[
+        return self.run(model=model, x_test=x_test, verbose=False)[
             "y_pred_proba"
         ]

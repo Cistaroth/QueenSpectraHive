@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Sequence
 
 import pandas as pd
-from transformers import ASTFeatureExtractor
 import torch
 
 from modules.data_loading.audio_data_loader import LazyAudioDataset, AudioDataLoaderModule
@@ -12,42 +11,67 @@ from logger import logger
 
 class BeeAudioDataset(LazyAudioDataset):
     """
-    PyTorch dataset that wraps LazyAudioDataset and applies AST Feature Extraction for log-mel spectrograms.
-
+    PyTorch dataset that wraps LazyAudioDataset specifically for Queen Bee Audio Dataset.
     """
 
     TARGET_SR: int = 16000
 
     def __init__(
         self,
-        df: pd.DataFrame,
-        labels: pd.Series,
+        features: pd.DataFrame,
+        labels: pd.Series | None,
         audio_dir: Path,
     ) -> None:
         """
+        Initialise the dataset.
 
         Args:
             df (pd.DataFrame): DataFrame with audio metadata (file name, start_sec, end_sec).
             labels (pd.Series): Target labels for each sample.
             audio_dir (Path): Directory containing audio segment files.
+        
+        Returns:
+            None
         """
-        self._labels = labels.reset_index(drop=True)
+        if labels is None:
+            self._labels = None
+        else:
+            self._labels = labels.reset_index(drop=True)
+
         self._audio_dir = Path(audio_dir)
 
         loader_module = AudioDataLoaderModule(
             filepath=self._audio_dir,
             sample_rate=self.TARGET_SR,
         )
-        self._lazy_dataset = loader_module.run(dataframe=df, verbose=False)["dataset"]
+        self._lazy_dataset = loader_module.run(dataframe=features, verbose=False)["dataset"]
 
     def __len__(self) -> int:
+        """
+        Get the number of samples in the dataset.
+
+        Args:
+            None
+
+        Returns:
+            int: Number of samples in the dataset.
+        """
         return len(self._lazy_dataset)
 
     def __getitem__(self, idx: int):
         """
-        Get a sample: waveform → ASTFeatureExtractor → Log-mel Spectrogram tensor + label.
+        Get a sample
+
+        Args:
+            idx (int): Index of the sample to get.
+
+        Returns:
+            tuple: A tuple containing the features and the label.
         """
-        label = int(self._labels.iloc[idx])
+        if self._labels is None:
+            label = torch.tensor(-1, dtype=torch.long)
+        else:
+            label = int(self._labels.iloc[idx])
 
         try:
             # Get waveform from LazyAudioDataset via AudioDataLoaderModule (shape: [channels, time])
@@ -71,7 +95,6 @@ class BeeAudioDataset(LazyAudioDataset):
             features = [torch.zeros((1024, 128))]
 
         return *features, label
-
 
     @abstractmethod
     def _get_features(self, idx: int, waveform: torch.Tensor) -> Sequence:

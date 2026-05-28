@@ -63,7 +63,7 @@ class AudioTransformerSettings(BaseModel):
         model_hyperparameters={
             "audio_dir":      [str(AUDIO_DIR)],
             "audio_path_col": ["file name"],
-            "num_classes":    [2],
+            "num_classes":    [1],
             "pretrained_model": ["MIT/ast-finetuned-audioset-10-10-0.4593"],
             "epochs":         [7],
             "batch_size":     [2],

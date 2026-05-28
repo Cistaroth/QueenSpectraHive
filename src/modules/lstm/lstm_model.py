@@ -5,19 +5,37 @@ import torch.nn as nn
 class FusionLSTMModel(
     nn.Module,
 ):
-    def __init__(self, lstm_layers: tuple, cur_input_size: int, ff_hidden_size, layers):
+    def __init__(
+        self,
+        lstm_layers: tuple,
+        features_input_size: int,
+        embeddings_model: tuple,
+        ff_hidden_size: int, 
+    ) -> None:
         super().__init__()
 
         seq_input_size, lstm_hidden_size, lstm_num_layers, lstm_dropout = lstm_layers
 
         # LSTM Component
-        self.lstm = nn.LSTM(seq_input_size, lstm_hidden_size, lstm_num_layers, dropout=lstm_dropout, batch_first=True)
+        self.lstm = nn.LSTM(
+            input_size=seq_input_size,
+            hidden_size=lstm_hidden_size,
+            num_layers=lstm_num_layers, 
+            dropout=lstm_dropout,
+            batch_first=True
+        )
 
         # Tabular component
-        self.embeddings_model = nn.Sequential(*layers)
+        self.embeddings_model = nn.Sequential(
+            *embeddings_model
+        )
 
         # Feed-forward Component
-        self.ff = nn.Sequential(nn.Linear(lstm_hidden_size + cur_input_size, ff_hidden_size), nn.ReLU(), nn.Linear(ff_hidden_size, 1))
+        self.ff = nn.Sequential(
+            nn.Linear(lstm_hidden_size + features_input_size, ff_hidden_size),
+            nn.ReLU(),
+            nn.Linear(ff_hidden_size, 1)
+        )
 
     def forward(self, historical_data: torch.Tensor, current_data: torch.Tensor):
         lstm_output, _ = self.lstm(historical_data)

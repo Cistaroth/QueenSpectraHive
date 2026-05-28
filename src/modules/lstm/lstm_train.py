@@ -12,15 +12,20 @@ from logger import console, logger
 from torch_datasets.lstm_dataset import LSTMBeeAudioDataset
 from modules.lstm.lstm_model import FusionLSTMModel
 
+
 class FusionLSTMTrainModule(TrainerBase):
-    name = "CompositeModule"
-    inputs = {"x_train", "y_train"}
+    """
+    Pipeline step that trains a fused LSTM and MLP model on audio and tabular features.
+    """
+
+    name = "FusionLSTMTrainModule"
+    inputs = {"x_train", "y_train", "x_val", "y_val"}
     outputs = {"model"}
 
     def __init__(
         self,
         drop_column: list[str],
-        layers: tuple,
+        embeddings_model: tuple,
         lstm_layers: tuple,
         classification_hidden_size: int,
         audio_dir: Path,
@@ -31,16 +36,32 @@ class FusionLSTMTrainModule(TrainerBase):
         num_workers: int = 0,
         seed: int = 42,
         device: str | None = None,
+        save_path: Path | None = Path(__file__).parents[3] / "trained_models" / "lstm",
     ) -> None:
         """
-        Initialize the Neural Network to combine tabular data with the LSTM trainer class
+        Initialize the training module for the fused LSTM and MLP model.
 
         Args:
-            *args: Unpacked list of PyTorch layers
+            drop_column (list[str]): Columns to drop from the dataset.
+            layers (tuple): Number of hidden units in each MLP layer.
+            lstm_layers (tuple): Number of hidden units in each LSTM layer.
+            classification_hidden_size (int): Number of hidden units in the classification layer.
+            audio_dir (Path): Path to the directory containing the audio files.
+            n_mfcc (int): Number of MFCC features to extract from the audio files.
+            epochs (int): Number of epochs to train the model.
+            batch_size (int): Batch size to use during training.
+            learning_rate (float): Learning rate to use during training.
+            num_workers (int): Number of workers for data loading. Defaults to 0.
+            seed (int): Random seed for reproducibility. Defaults to 42.
+            device (str | None): Device to use for training. Defaults to None.
+            save_path (Path | None): Path to save the trained model. Defaults to the default save path.
+
+        Returns:
+            None
         """
         super().__init__()
         self._drop_column = drop_column
-        self._layers = layers
+        self._embeddings_model = embeddings_model
         self._lstm_layers = lstm_layers
         self._classification_hidden_size = classification_hidden_size
         self._audio_dir = audio_dir
@@ -51,6 +72,7 @@ class FusionLSTMTrainModule(TrainerBase):
         self._lr = learning_rate
         self._num_workers = num_workers
         self._seed = seed
+        self._save_path = save_path
 
         if device is None:
             if torch.cuda.is_available():
@@ -63,32 +85,85 @@ class FusionLSTMTrainModule(TrainerBase):
             self._device = torch.device(device)
 
     def _set_seed(self) -> None:
+        """
+        Set the random seed for reproducibility.
+
+        Returns:
+            None
+        """
         random.seed(self._seed)
         np.random.seed(self._seed)
         torch.manual_seed(self._seed)
         if self._device.type == "cuda":
             torch.cuda.manual_seed_all(self._seed)
-    
-    def run(self, x_train: pd.DataFrame, y_train: pd.Series, verbose: bool = True) -> dict[str, FusionLSTMModel]:
 
-        if verbose:
-            console.section(title="Generating Composite model")
-            logger.info(f"Processing on: {x_train.shape[-1] - len(self._drop_column)} columns")
+    def _build_dataloader(self, x: pd.DataFrame, y: pd.Series) -> DataLoader:
+        """
+        Build a dataloader from a feature frame and its labels.
 
-        dataset = LSTMBeeAudioDataset(df=x_train, labels=y_train, audio_dir=self._audio_dir, n_mfcc=self._n_mfcc, columns_to_drop=self._drop_column)
+        Args:
+            x (pd.DataFrame): Feature frame.
+            y (pd.Series): Labels.
 
-        loader = DataLoader(
-            dataset, batch_size=self._batch_size, shuffle=True, num_workers=self._num_workers, pin_memory=(self._device.type == "cuda")
+        Returns:
+            DataLoader: Dataloader yielding (audio_features, tabular_features, labels) batches.
+        """
+        dataset = LSTMBeeAudioDataset(
+            features=x,
+            labels=y,
+            audio_dir=self._audio_dir,
+            n_mfcc=self._n_mfcc,
+            columns_to_drop=self._drop_column,
+        )
+        return DataLoader(
+            dataset,
+            batch_size=self._batch_size,
+            shuffle=True,
+            num_workers=self._num_workers,
+            pin_memory=(self._device.type == "cuda"),
         )
 
-        model = FusionLSTMModel(
-            lstm_layers=self._lstm_layers, cur_input_size=32, ff_hidden_size=self._classification_hidden_size, layers=self._layers
-        )
+    def _save_model(self, model: FusionLSTMModel) -> None:
+        """
+        Save the fused LSTM and MLP model.
 
-        criterion = nn.BCEWithLogitsLoss()
-        optimiser = torch.optim.Adam(model.parameters(), lr=self._lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimiser, T_max=self._epochs)
+        Args:
+            model (FusionLSTMModel): The fused LSTM and MLP model.
 
+        Returns:
+            None
+        """
+        if not self._save_path.exists():
+            self._save_path.mkdir(parents=True)
+
+        nr = len([f for f in self._save_path.iterdir() if f.name.startswith("fusionlstm")]) + 1
+        torch.save(model.state_dict(), self._save_path / f"fusionlstm_{nr}.pth")
+
+    def _train_loop(
+        self,
+        model: FusionLSTMModel,
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+        criterion: nn.Module,
+        optimiser: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler.LRScheduler,
+        verbose: bool = True,
+    ) -> None:
+        """
+        Run the full training loop over all epochs.
+
+        Args:
+            model (FusionLSTMModel): The model to train.
+            train_loader (DataLoader): The data loader for training.
+            val_loader (DataLoader): The data loader for validation.
+            criterion (nn.Module): The loss function.
+            optimiser (torch.optim.Optimizer): The optimizer.
+            scheduler (torch.optim.lr_scheduler.LRScheduler): The learning rate scheduler.
+            verbose (bool): Whether to log training progress. Defaults to True.
+
+        Returns:
+            None
+        """
         for epoch in range(1, self._epochs + 1):
             model.train()
             running_loss = 0.0
@@ -98,10 +173,10 @@ class FusionLSTMTrainModule(TrainerBase):
             if verbose:
                 logger.info(f"Epoch {epoch}/{self._epochs} - Training...")
 
-            for batch_features, batch_tabular_features, batch_labels in loader:
+            for batch_features, batch_tabular_features, batch_labels in train_loader:
                 batch_features = batch_features.to(self._device)
-                batch_labels = batch_labels.to(self._device)
                 batch_tabular_features = batch_tabular_features.to(self._device)
+                batch_labels = batch_labels.to(self._device)
 
                 optimiser.zero_grad()
                 logits = model(batch_features, batch_tabular_features)
@@ -120,16 +195,126 @@ class FusionLSTMTrainModule(TrainerBase):
             epoch_loss = running_loss / total
             epoch_acc = correct / total
 
+            val_loss, val_acc = self._evaluate(model, val_loader, criterion)
+
             if verbose:
-                logger.info(f"Epoch completed [{epoch:>3}/{self._epochs}]  loss={epoch_loss:.4f}  acc={epoch_acc:.4f}")
+                logger.info(
+                    f"Epoch completed [{epoch:>3}/{self._epochs}]  "
+                    f"loss={epoch_loss:.4f}  acc={epoch_acc:.4f}    "
+                    f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}"
+                )
+
+    @torch.no_grad()
+    def _evaluate(self, model: FusionLSTMModel, loader: DataLoader, criterion: nn.Module) -> tuple[float, float]:
+        """
+        Run a single evaluation pass over a loader without updating weights.
+
+        Args:
+            model (FusionLSTMModel): The model being evaluated.
+            loader (DataLoader): Validation data loader.
+            criterion (nn.Module): Loss function (same as training).
+
+        Returns:
+            tuple[float, float]: Average loss and accuracy over the validation set.
+        """
+        model.eval()
+        running_loss = 0.0
+        correct = 0
+        total = 0
+
+        for batch_features, batch_tabular_features, batch_labels in loader:
+            batch_features = batch_features.to(self._device)
+            batch_tabular_features = batch_tabular_features.to(self._device)
+            batch_labels = batch_labels.to(self._device)
+
+            logits = model(batch_features, batch_tabular_features)
+            loss = criterion(logits.squeeze(1), batch_labels.float())
+
+            running_loss += loss.item() * len(batch_labels)
+            preds = (torch.sigmoid(logits.squeeze(1)) > 0.5).long()
+            correct += (preds == batch_labels).sum().item()
+            total += len(batch_labels)
+
+        return running_loss / total, correct / total
+
+    def run(
+        self,
+        x_train: pd.DataFrame,
+        y_train: pd.Series,
+        x_val: pd.DataFrame,
+        y_val: pd.Series,
+        verbose: bool = True,
+    ) -> dict[str, FusionLSTMModel]:
+        """
+        Train the fused LSTM and MLP model.
+
+        Args:
+            x_train (pd.DataFrame): Training data.
+            y_train (pd.Series): Training labels.
+            x_val (pd.DataFrame): Validation data.
+            y_val (pd.Series): Validation labels.
+            verbose (bool): Whether to log training progress. Defaults to True.
+
+        Returns:
+            dict[str, FusionLSTMModel]: A dictionary containing the trained model.
+        """
+        self._set_seed()
+
+        if verbose:
+            console.section(title="Training Fusion LSTM model")
+            logger.info(f"Processing on: {x_train.shape[-1] - len(self._drop_column)} columns")
+            logger.info(f"Total training samples: {len(x_train):,}")
+            logger.info(f"Total validation samples: {len(x_val):,}")
+            logger.info("Building dataloaders...")
+
+        train_loader = self._build_dataloader(x_train, y_train)
+        val_loader = self._build_dataloader(x_val, y_val)
+
+
+        model = FusionLSTMModel(
+            lstm_layers=self._lstm_layers,
+            features_input_size=self._embeddings_model[-1].out_features,
+            ff_hidden_size=self._classification_hidden_size,
+            embeddings_model=self._embeddings_model,
+        ).to(self._device)
+
+        criterion = nn.BCEWithLogitsLoss()
+        optimiser = torch.optim.Adam(model.parameters(), lr=self._lr)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimiser, T_max=self._epochs)
+
+        if verbose:
+            logger.info(f"Starting training for {self._epochs} epochs...")
+
+        self._train_loop(model, train_loader, val_loader, criterion, optimiser, scheduler, verbose)
 
         if verbose:
             logger.info("Finished creating composite model.")
+            logger.info("Saving model...")
+
+        self._save_model(model)
+
+        if verbose:
+            logger.info("Model saved.")
 
         return {"model": model}
 
-    def train(self, x_train: pd.DataFrame, y_train: pd.DataFrame) -> FusionLSTMModel:
+    def train(
+        self,
+        x_train: pd.DataFrame,
+        y_train: pd.Series,
+        x_val: pd.DataFrame,
+        y_val: pd.Series,
+    ) -> FusionLSTMModel:
         """
-        Obtain the embeddings for the tabular data.
+        Train and return the model without pipeline scaffolding.
+
+        Args:
+            x_train (pd.DataFrame): Training data.
+            y_train (pd.Series): Training labels.
+            x_val (pd.DataFrame): Validation data.
+            y_val (pd.Series): Validation labels.
+
+        Returns:
+            FusionLSTMModel: The trained model.
         """
-        return self.run(x_train=x_train, y_train=y_train, verbose=False)["model"]
+        return self.run(x_train=x_train, y_train=y_train, x_val=x_val, y_val=y_val, verbose=True)["model"]

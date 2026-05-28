@@ -57,8 +57,13 @@ class FusionLSTMInferenceModule(InferencerBase):
         else:
             self._device = torch.device(device)
 
-    def _build_loader(self, x_test: pd.DataFrame, y_test: pd.Series | None) -> DataLoader:
-        dataset = LSTMBeeAudioDataset(columns_to_drop=self._columns_to_drop, df=x_test, labels=y_test, audio_dir=self._audio_dir, n_mfcc=self._n_mfcc)
+    def _build_loader(self, x_test: pd.DataFrame,) -> DataLoader:
+        dataset = LSTMBeeAudioDataset(
+            columns_to_drop=self._columns_to_drop,
+            features=x_test,
+            audio_dir=self._audio_dir,
+            n_mfcc=self._n_mfcc
+        )
         return DataLoader(
             dataset,
             batch_size=self._batch_size,
@@ -77,24 +82,24 @@ class FusionLSTMInferenceModule(InferencerBase):
         Run batch inference and return predictions + probabilities.
 
         Args:
-            model   (CompositeModel): The fusion lstm model.
+            model   (FusionLSTMModel): The fusion lstm model.
             x_test  (pd.DataFrame)    : Test features with audio metadata and tabular data.
             verbose (bool)            : Verbose logging. Defaults to True.
         Returns:
             dict containing:
-                y_pred       – predicted class indices
-                y_pred_proba – probability of class 1
+                y_pred       - predicted class indices
+                y_pred_proba - probability of class 1
         """
 
         if verbose:
-            console.section("Evaluating lstm fusion model")
+            console.section("Evaluating LSTM Fusion model")
             logger.info(f"Device     : {self._device}")
             logger.info(f"Test shape : {x_test.shape}")
 
         model = model.to(self._device)
         model.eval()
 
-        loader = self._build_loader(x_test, pd.Series(np.zeros(len(x_test))))
+        loader = self._build_loader(x_test)
 
         all_preds, all_proba = [], []
         with torch.no_grad():
@@ -129,8 +134,8 @@ class FusionLSTMInferenceModule(InferencerBase):
         Return predicted class labels for x_test.
 
         Args:
-            model  (AudioTransformer)
-            x_test (pd.DataFrame)
+            model  (FusionLSTMModel): The LSTM + MLP model.
+            x_test (pd.DataFrame): Test features with audio metadata.
         Returns:
             np.ndarray: Predicted class indices
         """
@@ -145,8 +150,8 @@ class FusionLSTMInferenceModule(InferencerBase):
         Return predicted probabilities (positive class) for x_test.
 
         Args:
-            model  (AudioTransformer)
-            x_test (pd.DataFrame)
+            model  (FusionLSTMModel): The LSTM + MLP model.
+            x_test (pd.DataFrame): Test features with audio metadata.
         Returns:
             np.ndarray: Probability of class 1, shape (N,).
         """
