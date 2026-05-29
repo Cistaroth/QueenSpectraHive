@@ -24,6 +24,7 @@ class FusionLSTMInferenceModule(InferencerBase):
         audio_path_col: str = "file name",
         batch_size: int = 32,
         num_workers: int = 0,
+        threshold: float = 0.5,
         device: str | None = None,
     ) -> None:
         """
@@ -46,6 +47,7 @@ class FusionLSTMInferenceModule(InferencerBase):
         self._num_workers = num_workers
         self._n_mfcc = n_mfcc
         self._columns_to_drop = drop_column
+        self._threshold = threshold
 
         if device is None:
             if torch.cuda.is_available():
@@ -109,7 +111,7 @@ class FusionLSTMInferenceModule(InferencerBase):
 
                 logits = model(batch_mel, batch_tabular)
                 probs = torch.sigmoid(logits.squeeze(1))
-                preds = (probs > 0.5).long()
+                preds = (probs > self._threshold).long()
 
                 all_preds.append(preds.cpu().numpy())
                 all_proba.append(probs.cpu().numpy())

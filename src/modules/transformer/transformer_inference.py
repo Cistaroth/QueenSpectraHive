@@ -1,7 +1,5 @@
 from pathlib import Path
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import torch
@@ -17,7 +15,7 @@ from torch_datasets.transformer_dataset import TransformerBeeAudioDataset
 class TransformerInferenceModule(InferencerBase):
     """
     Pipeline step that runs inference with a fine-tuned Audio Spectrogram Transformer.
-  
+
     """
 
     name = "TransformerInference"
@@ -31,6 +29,7 @@ class TransformerInferenceModule(InferencerBase):
         pretrained_model: str = "MIT/ast-finetuned-audioset-10-10-0.4593",
         batch_size: int = 32,
         num_workers: int = 0,
+        threshold: float = 0.5,
         device: str | None = None,
     ) -> None:
         """
@@ -42,6 +41,7 @@ class TransformerInferenceModule(InferencerBase):
             pretrained_model (str)  : Hugging Face model ID for AST feature extractor.
             batch_size (int)        : DataLoader batch size.
             num_workers (int)       : DataLoader worker processes.
+            threshold (float)       : Decision threshold on the positive-class probability.
             device (str | None)     : 'cpu', 'cuda', 'mps', or None (auto-detect).
         Returns:
             None
@@ -51,12 +51,13 @@ class TransformerInferenceModule(InferencerBase):
         if not resolved_audio.is_absolute():
             # Resolves cleanly up to your project's master root data folder
             resolved_audio = Path(__file__).resolve().parents[2] / "data" / "sound_files" / "sound_files"
-            
+
         self._audio_dir = resolved_audio
         self._audio_col = audio_path_col
         self._pretrained_model = pretrained_model
         self._batch_size = batch_size
         self._num_workers = num_workers
+        self._threshold = threshold
 
         if device is None:
             if torch.cuda.is_available():
@@ -68,7 +69,6 @@ class TransformerInferenceModule(InferencerBase):
         else:
             self._device = torch.device(device)
 
-    
     def _build_loader(self, x_test: pd.DataFrame) -> DataLoader:
         """
         Build the dataloader for inference.
@@ -100,14 +100,18 @@ class TransformerInferenceModule(InferencerBase):
         """
         Run batch inference and return predictions + probabilities.
 
+        The model is a single-logit binary classifier (trained with
+        BCEWithLogitsLoss), so the positive-class probability is the sigmoid of
+        the logit and the predicted label is that probability thresholded.
+
         Args:
             model   (AudioTransformer): The fine-tuned transformer model.
             x_test  (pd.DataFrame)    : Test features with audio metadata.
             verbose (bool)            : Verbose logging. Defaults to True.
         Returns:
             dict containing:
-                y_pred       - predicted class indices  
-                y_pred_proba - probability of class 1   
+                y_pred       - predicted class labels (0/1)
+                y_pred_proba - probability of class 1
         """
         if verbose:
             console.section("Evaluating Audio Spectrogram Transformer")
@@ -125,12 +129,12 @@ class TransformerInferenceModule(InferencerBase):
         with torch.no_grad():
             for batch_mel, _ in loader:
                 batch_mel = batch_mel.to(self._device)
-                logits = model(batch_mel)     
-                probs = torch.softmax(logits, dim=1)
-                preds = probs.argmax(dim=1)  
+                logits = model(batch_mel)
+                probs = torch.sigmoid(logits.squeeze(1))
+                preds = (probs > self._threshold).long()
 
                 all_preds.append(preds.cpu().numpy())
-                all_proba.append(probs[:, 0].cpu().numpy())
+                all_proba.append(probs.cpu().numpy())
 
         y_pred = np.concatenate(all_preds)
         y_pred_proba = np.concatenate(all_proba)
@@ -155,9 +159,9 @@ class TransformerInferenceModule(InferencerBase):
 
         Args:
             model  (AudioTransformer)
-            x_test (pd.DataFrame)   
+            x_test (pd.DataFrame)
         Returns:
-            np.ndarray: Predicted class indices
+            np.ndarray: Predicted class labels (0/1).
         """
         return self.run(model=model, x_test=x_test, verbose=False)[
             "y_pred"
@@ -173,7 +177,7 @@ class TransformerInferenceModule(InferencerBase):
 
         Args:
             model  (AudioTransformer)
-            x_test (pd.DataFrame)    
+            x_test (pd.DataFrame)
         Returns:
             np.ndarray: Probability of class 1, shape (N,).
         """
