@@ -47,8 +47,12 @@ class TransformerInferenceModule(InferencerBase):
             None
         """
         super().__init__()
-
-        self._audio_dir = Path(audio_dir)
+        resolved_audio = Path(audio_dir)
+        if not resolved_audio.is_absolute():
+            # Resolves cleanly up to your project's master root data folder
+            resolved_audio = Path(__file__).resolve().parents[2] / "data" / "sound_files" / "sound_files"
+            
+        self._audio_dir = resolved_audio
         self._audio_col = audio_path_col
         self._pretrained_model = pretrained_model
         self._batch_size = batch_size
@@ -126,7 +130,7 @@ class TransformerInferenceModule(InferencerBase):
                 preds = probs.argmax(dim=1)  
 
                 all_preds.append(preds.cpu().numpy())
-                all_proba.append(probs[:, 1].cpu().numpy())
+                all_proba.append(probs[:, 0].cpu().numpy())
 
         y_pred = np.concatenate(all_preds)
         y_pred_proba = np.concatenate(all_proba)

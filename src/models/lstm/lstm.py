@@ -18,6 +18,7 @@ from modules.tabular.tabular_splitters import (
     TabularTrainTestSplitterModule,
 )
 from modules.data_augmentation.audio_splicing import AudioSplicerModule
+from modules.data_augmentation.tabular_interpolation import TabularSMOTE
 from modules.hyperparameter_tuning.hyperparameter_tuning import (
     HyperparameterTuningStratifiedKFoldModule,
 )
@@ -72,6 +73,8 @@ def main() -> None:
                 random_state=settings.SEED,
             ),
 
+            TabularSMOTE(),
+
             AudioSplicerModule(
                 audio_path_col=settings.AUDIO_PATH_COL,
                 audio_dir=settings.AUDIO_DIR,
@@ -85,7 +88,7 @@ def main() -> None:
             ModelEvaluatorModule(
                 inferencer=settings.HYPERPARAMETER_SETTINGS.model_inference,
                 class_names=settings.class_names,
-            ).set_dependency(["x_test", "y_test"], -3),
+            ).set_dependency(["x_test", "y_test"], -4),
         ],
     ).run()
 

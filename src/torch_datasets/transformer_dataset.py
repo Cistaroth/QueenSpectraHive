@@ -11,9 +11,9 @@ class TransformerBeeAudioDataset(BeeAudioDataset):
     def __init__(
         self,
         features: pd.DataFrame,
-        labels: pd.Series,
         audio_dir: Path,
         pretrained_model: str,
+        labels: pd.Series | None = None
     ):
         super().__init__(features=features, labels=labels, audio_dir=audio_dir)
 

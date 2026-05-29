@@ -24,10 +24,10 @@ class AudioTransformerSettings(BaseModel):
     SEED: int = config.SEED
 
     DATASET_HANDLE: str = "annajyang/beehive-sounds"
-    OUTPUT_DIR: Path = Path(__file__).parents[2] / "data"
+    OUTPUT_DIR: Path = Path(__file__).resolve().parents[2] / "data"
     CSV_FILEPATH: Path = OUTPUT_DIR / "all_data_updated.csv"
     AUDIO_DIR: Path = OUTPUT_DIR / "sound_files" / "sound_files"
-    PLOTS_DIR: Path = Path(__file__).parents[2] / "plots"
+    PLOTS_DIR: Path = Path(__file__).resolve().parents[2] / "plots"
 
     AUDIO_PATH_COL: str = "file name"
     TARGET_COLUMN: str = "queen presence"
