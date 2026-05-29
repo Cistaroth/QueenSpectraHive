@@ -137,7 +137,7 @@ class TransformerTrainModule(TrainerBase):
         self,
         model: AudioTransformer,
         train_loader: DataLoader,
-        val_loader: DataLoader,
+        val_loader: DataLoader | None,
         criterion: nn.Module,
         optimiser: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler.LRScheduler,
@@ -149,7 +149,8 @@ class TransformerTrainModule(TrainerBase):
         Args:
             model (AudioTransformer): The model to train.
             train_loader (DataLoader): The data loader for training.
-            val_loader (DataLoader): The data loader for validation.
+            val_loader (DataLoader | None): The data loader for validation. If None,
+                validation is skipped.
             criterion (nn.Module): The loss function.
             optimiser (torch.optim.Optimizer): The optimizer.
             scheduler (torch.optim.lr_scheduler.LRScheduler): The learning rate scheduler.
@@ -188,13 +189,18 @@ class TransformerTrainModule(TrainerBase):
             epoch_loss = running_loss / total
             epoch_acc = correct / total
 
-            val_loss, val_acc = self._evaluate(model, val_loader, criterion)
-
-            if verbose:
+            if val_loader is not None:
+                val_loss, val_acc = self._evaluate(model, val_loader, criterion)
+                if verbose:
+                    logger.info(
+                        f"Epoch completed [{epoch:>3}/{self._epochs}]  "
+                        f"loss={epoch_loss:.4f}  acc={epoch_acc:.4f}    "
+                        f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}"
+                    )
+            elif verbose:
                 logger.info(
                     f"Epoch completed [{epoch:>3}/{self._epochs}]  "
-                    f"loss={epoch_loss:.4f}  acc={epoch_acc:.4f}    "
-                    f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}"
+                    f"loss={epoch_loss:.4f}  acc={epoch_acc:.4f}"
                 )
 
     @torch.no_grad()
@@ -233,8 +239,8 @@ class TransformerTrainModule(TrainerBase):
         self,
         x_train: pd.DataFrame,
         y_train: pd.Series,
-        x_val: pd.DataFrame,
-        y_val: pd.Series,
+        x_val: pd.DataFrame | None = None,
+        y_val: pd.Series | None = None,
         verbose: bool = True,
     ) -> dict[str, AudioTransformer]:
         """
@@ -243,8 +249,8 @@ class TransformerTrainModule(TrainerBase):
         Args:
             x_train (pd.DataFrame): Training data.
             y_train (pd.Series): Training labels.
-            x_val (pd.DataFrame): Validation data.
-            y_val (pd.Series): Validation labels.
+            x_val (pd.DataFrame | None): Validation data. If None, validation is skipped.
+            y_val (pd.Series | None): Validation labels. If None, validation is skipped.
             verbose (bool): Whether to log training progress. Defaults to True.
 
         Returns:
@@ -252,15 +258,20 @@ class TransformerTrainModule(TrainerBase):
         """
         self._set_seed()
 
+        has_val = x_val is not None and y_val is not None
+
         if verbose:
             console.section("Pretrained Audio Spectrogram Transformer")
             logger.info(f"Pretrained Model: {self._pretrained_model}")
             logger.info(f"Total training samples: {len(x_train):,}")
-            logger.info(f"Total validation samples: {len(x_val):,}")
+            if has_val:
+                logger.info(f"Total validation samples: {len(x_val):,}")
+            else:
+                logger.info("No validation data provided - validation will be skipped.")
             logger.info("Building dataloaders...")
 
         train_loader = self._build_dataloader(x_train, y_train)
-        val_loader = self._build_dataloader(x_val, y_val)
+        val_loader = self._build_dataloader(x_val, y_val) if has_val else None
 
         model = AudioTransformer(
             num_classes=self._num_classes,
@@ -291,8 +302,8 @@ class TransformerTrainModule(TrainerBase):
         self,
         x_train: pd.DataFrame,
         y_train: pd.Series,
-        x_val: pd.DataFrame,
-        y_val: pd.Series,
+        x_val: pd.DataFrame | None = None,
+        y_val: pd.Series | None = None,
     ) -> AudioTransformer:
         """
         Fine-tune and return the model without pipeline scaffolding.
@@ -300,8 +311,8 @@ class TransformerTrainModule(TrainerBase):
         Args:
             x_train (pd.DataFrame): Training data.
             y_train (pd.Series): Training labels.
-            x_val (pd.DataFrame): Validation data.
-            y_val (pd.Series): Validation labels.
+            x_val (pd.DataFrame | None): Validation data. If None, validation is skipped.
+            y_val (pd.Series | None): Validation labels. If None, validation is skipped.
 
         Returns:
             AudioTransformer: The fine-tuned model.
