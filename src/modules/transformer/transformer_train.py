@@ -33,6 +33,7 @@ class TransformerTrainModule(TrainerBase):
         batch_size: int = 16,
         learning_rate: float = 1e-4,
         freeze_backbone: bool = True,
+        unfreeze_last_n_layers: int = 0,
         head_learning_rate: float | None = None,
         backbone_learning_rate: float = 1e-5,
         num_workers: int = 0,
@@ -54,9 +55,17 @@ class TransformerTrainModule(TrainerBase):
                 learning rate when ``head_learning_rate`` is None, and (when the
                 backbone is unfrozen) only matters via ``backbone_learning_rate``.
             freeze_backbone (bool): When True, freeze the pretrained AST backbone and
-                train only the classification head. This is the main guard against the
-                model collapsing to always predicting the majority class on a small,
+                train only the classification head (plus any top blocks selected via
+                ``unfreeze_last_n_layers``). This is the main guard against the model
+                collapsing to always predicting the majority class on a small,
                 imbalanced dataset. Defaults to True.
+            unfreeze_last_n_layers (int): When ``freeze_backbone`` is True, additionally
+                fine-tune the top N AST encoder blocks (at ``backbone_learning_rate``) so
+                the high-level features can adapt to bee audio. A linear probe on fully
+                frozen AudioSet features is often too weak to separate queen presence;
+                unfreezing a couple of top blocks gives the features room to adapt without
+                the instability of a full fine-tune. 0 keeps the backbone fully frozen.
+                Defaults to 0.
             head_learning_rate (float | None): Learning rate for the classification
                 head. Defaults to None, in which case ``learning_rate`` is used.
             backbone_learning_rate (float): Learning rate for the backbone when it is
@@ -80,6 +89,7 @@ class TransformerTrainModule(TrainerBase):
         self._batch_size = batch_size
         self._lr = learning_rate
         self._freeze_backbone = freeze_backbone
+        self._unfreeze_last_n_layers = unfreeze_last_n_layers
         self._head_lr = head_learning_rate
         self._backbone_lr = backbone_learning_rate
         self._num_workers = num_workers
@@ -218,7 +228,7 @@ class TransformerTrainModule(TrainerBase):
             epoch_acc = correct / total
 
             if val_loader is not None:
-                val_loss, val_acc = self._evaluate(model, val_loader, criterion)
+                val_loss, val_acc, val_stats = self._evaluate(model, val_loader, criterion)
 
                 # Track the best-val-loss weights so we can restore them later.
                 if val_loss < best_val_loss:
@@ -230,7 +240,9 @@ class TransformerTrainModule(TrainerBase):
                     logger.info(
                         f"Epoch completed [{epoch:>3}/{self._epochs}]  "
                         f"loss={epoch_loss:.4f}  acc={epoch_acc:.4f}    "
-                        f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}"
+                        f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}    "
+                        f"val_pred[0/1]={val_stats['pred_neg']}/{val_stats['pred_pos']}  "
+                        f"val_true[0/1]={val_stats['actual_neg']}/{val_stats['actual_pos']}"
                     )
             elif verbose:
                 logger.info(
@@ -248,7 +260,9 @@ class TransformerTrainModule(TrainerBase):
                 )
 
     @torch.no_grad()
-    def _evaluate(self, model: AudioTransformer, loader: DataLoader, criterion: nn.Module) -> tuple[float, float]:
+    def _evaluate(
+        self, model: AudioTransformer, loader: DataLoader, criterion: nn.Module
+    ) -> tuple[float, float, dict[str, int]]:
         """
         Run a single evaluation pass over a loader without updating weights.
 
@@ -258,12 +272,20 @@ class TransformerTrainModule(TrainerBase):
             criterion (nn.Module): Loss function (same as training).
 
         Returns:
-            tuple[float, float]: Average loss and accuracy over the validation set.
+            tuple[float, float, dict[str, int]]: Average loss, accuracy, and a dict of
+                class counts over the validation set with keys ``pred_neg``, ``pred_pos``,
+                ``actual_neg`` and ``actual_pos``. The prediction counts make a
+                majority-class collapse obvious at a glance (e.g. ``pred_pos`` equal to
+                the total while ``pred_neg`` is 0).
         """
         model.eval()
         running_loss = 0.0
         correct = 0
         total = 0
+        pred_pos = 0
+        pred_neg = 0
+        actual_pos = 0
+        actual_neg = 0
 
         for batch_features, batch_labels in loader:
             batch_features = batch_features.to(self._device)
@@ -277,7 +299,18 @@ class TransformerTrainModule(TrainerBase):
             correct += (preds == batch_labels).sum().item()
             total += len(batch_labels)
 
-        return running_loss / total, correct / total
+            pred_pos += int((preds == 1).sum().item())
+            pred_neg += int((preds == 0).sum().item())
+            actual_pos += int((batch_labels == 1).sum().item())
+            actual_neg += int((batch_labels == 0).sum().item())
+
+        stats = {
+            "pred_neg": pred_neg,
+            "pred_pos": pred_pos,
+            "actual_neg": actual_neg,
+            "actual_pos": actual_pos,
+        }
+        return running_loss / total, correct / total, stats
 
     def run(
         self,
@@ -325,6 +358,7 @@ class TransformerTrainModule(TrainerBase):
             num_classes=self._num_classes,
             pretrained_model=self._pretrained_model,
             freeze_backbone=self._freeze_backbone,
+            unfreeze_last_n_layers=self._unfreeze_last_n_layers,
         ).to(self._device)
 
         # Compute pos_weight from the training labels so the loss compensates
@@ -358,11 +392,20 @@ class TransformerTrainModule(TrainerBase):
         if verbose:
             n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
             n_total = sum(p.numel() for p in model.parameters())
+            if not self._freeze_backbone:
+                backbone_state = "unfrozen (full fine-tune)"
+                show_backbone_lr = True
+            elif self._unfreeze_last_n_layers > 0:
+                backbone_state = f"frozen except top {self._unfreeze_last_n_layers} block(s)"
+                show_backbone_lr = True
+            else:
+                backbone_state = "frozen"
+                show_backbone_lr = False
             logger.info(
-                f"Backbone {'frozen' if self._freeze_backbone else 'unfrozen'}; "
+                f"Backbone {backbone_state}; "
                 f"trainable params: {n_trainable:,}/{n_total:,} "
                 f"(head_lr={head_lr:g}"
-                + ("" if self._freeze_backbone else f", backbone_lr={self._backbone_lr:g}")
+                + (f", backbone_lr={self._backbone_lr:g}" if show_backbone_lr else "")
                 + ")"
             )
             logger.info(f"Starting fine-tuning for {self._epochs} epochs...")

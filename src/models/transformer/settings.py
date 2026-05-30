@@ -72,8 +72,12 @@ class AudioTransformerSettings(BaseModel):
             # 1e-4 on ~63 minority samples wrecks the pretrained features and the model
             # falls back to always predicting "queen present".
             "freeze_backbone":      [True],
+            # A linear probe on fully frozen AudioSet features can't separate queen
+            # presence (it collapses to the majority class even with the backbone frozen).
+            # Unfreeze the top 2 encoder blocks so the high-level features can adapt to
+            # bee audio, trained at the small backbone_learning_rate below.
+            "unfreeze_last_n_layers": [2],
             "head_learning_rate":   [1e-3],
-            # Only used if freeze_backbone is set False (kept small on purpose).
             "backbone_learning_rate": [1e-5],
             "learning_rate":  [1e-4],
         },
