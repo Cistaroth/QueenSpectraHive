@@ -1,47 +1,25 @@
-import time
-import shutil
 from pathlib import Path
 
-from fastapi import UploadFile
+import torch
+from pipeline import ModelPipeline
+from modules.inference.audio_saving import AudioSavingModule
+from modules.transformer.transformer_inference import TransformerInferenceModule
+from modules.transformer.transformer_model import AudioTransformer
 
-from pipeline import ModelPipeline, ModelPipelineStep
-
-class SpectralInferencePlaceholderModule(ModelPipelineStep):
-    name = "SpectralInferenceModule"
-    inputs = {"file"}
-    outputs = {"result"}
-
-    def __init__(
-        self,
-        save_path = Path(__file__).parents[3] / "data"
-    ) -> None:
-        super().__init__()
-
-        self._save_path = save_path
-
-    def run(
-        self,
-        file: UploadFile,
-    ) -> dict[str, str | bool]:
-        
-        # Upload the file to the specified path
-        save_path = self._save_path / "inference_input.wav"
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        with save_path.open("wb") as f:
-            shutil.copyfileobj(file.file, f)
-        
-        # Simulate processing time for inference (for demonstration purposes)
-        time.sleep(2)
-        
-        # Simulate inference result (for demonstration purposes)
-        result = True
-
-        # Return the inference result
-        return {"result": result}
+MODEL_PATH = Path(__file__).parents[4] / "trained_models" / "transformer" / "transformer_8.pth"
+MODEL = AudioTransformer(
+    num_classes = 1
+)
+MODEL.load_state_dict(torch.load(MODEL_PATH, map_location=torch.device("cpu")))
 
 INFERENCE_PIPELINE = ModelPipeline(
     steps = [
-        SpectralInferencePlaceholderModule()
+        AudioSavingModule(),
+        TransformerInferenceModule(),
     ]
+).add_context(
+    step = 1,
+    context = {
+        "model": MODEL
+    }
 )

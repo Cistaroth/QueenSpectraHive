@@ -186,12 +186,28 @@
   <!-- RESULT SCREEN -->
   <div class="result-screen" id="resultScreen">
     <div class="result-card" id="resultCard">
-      <div class="result-icon-wrap" id="resultIconWrap">
+
+      <!-- Radial confidence gauge wrapping the result icon -->
+      <div class="result-gauge" id="resultGauge">
         <div class="result-glow" id="resultGlow"></div>
+        <svg class="gauge-ring" viewBox="0 0 160 160" aria-hidden="true">
+          <circle class="gauge-track" cx="80" cy="80" r="70" fill="none"/>
+          <circle class="gauge-fill" id="gaugeFill" cx="80" cy="80" r="70" fill="none"
+                  transform="rotate(-90 80 80)"/>
+        </svg>
+        <div class="result-icon-wrap" id="resultIconWrap"></div>
       </div>
+
       <p class="result-label" id="resultLabel"></p>
       <h2 class="result-headline" id="resultHeadline"></h2>
       <p class="result-sub" id="resultSub"></p>
+
+      <!-- Probability readout -->
+      <div class="confidence-readout" id="confidenceReadout">
+        <span class="confidence-pct" id="confidencePct">0%</span>
+        <span class="confidence-cap">Queen presence probability</span>
+      </div>
+
       <div class="result-divider"></div>
       <div class="result-detail" id="resultDetail">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e8970a" stroke-width="1.8" stroke-linecap="round" id="resultDetailIcon">

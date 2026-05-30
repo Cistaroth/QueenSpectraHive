@@ -20,6 +20,9 @@ const resultScreen = document.getElementById('resultScreen');
 
 let currentFile = null;
 
+// Gauge geometry — must match the <circle r="70"> in index.html
+const RING_CIRC = 2 * Math.PI * 70;
+
 function fmt(b) {
   if (b < 1024)    return b + ' B';
   if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
@@ -33,6 +36,13 @@ function fmtTime(s) {
 
 function isWav(f) {
   return f.name.toLowerCase().endsWith('.wav') || f.type === 'audio/wav' || f.type === 'audio/x-wav';
+}
+
+// Accepts probability as a fraction (0–1) or a percentage (0–100); returns 0–1 or null.
+function normalizeProb(p) {
+  if (typeof p !== 'number' || isNaN(p)) return null;
+  if (p > 1) p = p / 100;
+  return Math.max(0, Math.min(1, p));
 }
 
 function showFile(file) {
@@ -75,7 +85,51 @@ function hideLoading() {
   loadingScreen.classList.remove('visible');
 }
 
-function showResult(isQueen, errorMsg) {
+// Animate a numeric count-up into el (rendered as a percentage).
+function countUp(el, target) {
+  const dur = 1100, start = performance.now();
+  function tick(now) {
+    const t = Math.min((now - start) / dur, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = Math.round(eased * target) + '%';
+    if (t < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// Drive the radial gauge + the numeric readout.
+// kind is 'queen' | 'no-queen'; prob is 0–1 or null (null => readout hidden).
+function setGauge(prob, kind) {
+  const gaugeFill         = document.getElementById('gaugeFill');
+  const confidenceReadout = document.getElementById('confidenceReadout');
+  const confidencePct     = document.getElementById('confidencePct');
+
+  gaugeFill.setAttribute('class', 'gauge-fill ' + kind);
+  gaugeFill.style.strokeDasharray = RING_CIRC;
+
+  if (prob === null) {
+    // No probability available (e.g. error) — leave the ring empty, hide readout.
+    gaugeFill.style.transition = 'none';
+    gaugeFill.style.strokeDashoffset = RING_CIRC;
+    confidenceReadout.className = 'confidence-readout hidden';
+    return;
+  }
+
+  // Reset the ring to empty, then animate to the target on the next frame.
+  gaugeFill.style.transition = 'none';
+  gaugeFill.style.strokeDashoffset = RING_CIRC;
+  void gaugeFill.getBoundingClientRect(); // force reflow so the reset "sticks"
+  requestAnimationFrame(() => {
+    gaugeFill.style.transition = '';
+    gaugeFill.style.strokeDashoffset = RING_CIRC * (1 - prob);
+  });
+
+  confidenceReadout.className = 'confidence-readout ' + kind;
+  confidencePct.textContent = '0%';
+  countUp(confidencePct, Math.round(prob * 100));
+}
+
+function showResult(isQueen, probability, errorMsg) {
   hideLoading();
 
   const iconWrap   = document.getElementById('resultIconWrap');
@@ -86,6 +140,8 @@ function showResult(isQueen, errorMsg) {
   const detail     = document.getElementById('resultDetail');
   const detailText = document.getElementById('resultDetailText');
   const detailIcon = document.getElementById('resultDetailIcon');
+
+  const prob = normalizeProb(probability);
 
   // Remove any previously injected icon
   const oldIcon = iconWrap.querySelector('.result-bee-icon');
@@ -101,6 +157,7 @@ function showResult(isQueen, errorMsg) {
     detail.className = 'result-detail no-queen';
     detailText.textContent = errorMsg;
     detailIcon.setAttribute('stroke', '#f08060');
+    setGauge(null, 'no-queen');
     iconWrap.insertAdjacentHTML('beforeend', `
       <svg class="result-bee-icon" width="60" height="60" viewBox="0 0 24 24" fill="none"
            stroke="#f08060" stroke-width="1.5" stroke-linecap="round">
@@ -119,6 +176,7 @@ function showResult(isQueen, errorMsg) {
     detail.className = 'result-detail';
     detailText.textContent = 'The spectral analysis of the submitted audio found characteristic queen bee frequency signatures. The hive has a queen.';
     detailIcon.setAttribute('stroke', '#e8970a');
+    setGauge(prob, 'queen');
     iconWrap.insertAdjacentHTML('beforeend', `
       <svg class="result-bee-icon" style="animation:crownBob 2s ease-in-out infinite"
            width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -139,8 +197,9 @@ function showResult(isQueen, errorMsg) {
     headline.textContent = 'No Queen Detected';
     sub.textContent = 'The hive appears to be queenless at this time.';
     detail.className = 'result-detail no-queen';
-    detailText.textContent = 'No queen bee frequency signatures were identified in the spectral data. The colony is be queenless.';
+    detailText.textContent = 'No queen bee frequency signatures were identified in the spectral data. The colony appears to be queenless.';
     detailIcon.setAttribute('stroke', '#f08060');
+    setGauge(prob, 'no-queen');
     iconWrap.insertAdjacentHTML('beforeend', `
       <svg class="result-bee-icon" width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
         <polygon points="32,6 56,19 56,45 32,58 8,45 8,19"
@@ -222,15 +281,15 @@ uploadBtn.addEventListener('click', async () => {
     if (!res.ok) {
       let detail = `Server error ${res.status}`;
       try { const j = await res.json(); detail = j.detail || detail; } catch (_) {}
-      showResult(false, detail);
+      showResult(false, null, detail);
       return;
     }
 
     const data = await res.json();
-    showResult(data.boolean === true, null);
+    showResult(data.boolean === true, data.probability, null);
 
   } catch (err) {
-    showResult(false, 'Could not reach the inference service. Please check your connection and try again.');
+    showResult(false, null, 'Could not reach the inference service. Please check your connection and try again.');
   }
 });
 

@@ -8,11 +8,11 @@ router = APIRouter()
 @router.post(
     "/spectral-inference",
     description="Queen Bee Presence Classifier Endpoint for Inference on Spectral Data. Files must be in WAV format.",
-    response_model=dict[str, str | bool],
+    response_model=dict[str, str | bool | float],
     response_description="Returns a message indicating whether a queen bee" \
         "was detected in the provided audio file. Also includes a boolean field for easier programmatic use.",
 )
-async def spectral_inference(file: UploadFile) -> dict[str, str | bool]:
+async def spectral_inference(file: UploadFile) -> dict[str, str | bool | float]:
     # Validate correctness of file type
     if file.content_type not in {"audio/wav", "audio/x-wav"} \
         or not (file.filename or "").lower().endswith(".wav"):
@@ -24,7 +24,12 @@ async def spectral_inference(file: UploadFile) -> dict[str, str | bool]:
 
     try:
         INFERENCE_PIPELINE.add_context(step=0, context={"file": file})
-        result = INFERENCE_PIPELINE.run()[-1].output["result"]
+        pipeline_result = INFERENCE_PIPELINE.run()[-1].output
+        
+        print(pipeline_result)
+        result = pipeline_result["y_pred"][0]
+        probability = pipeline_result["y_pred_proba"][0]
+
     except Exception as e:
         print("Error during inference:", e)
         raise HTTPException(
@@ -35,5 +40,6 @@ async def spectral_inference(file: UploadFile) -> dict[str, str | bool]:
     result = "Queen Bee Detected" if result else "No Queen Bee Detected"
     return {
         "message": result,
-        "boolean": result == "Queen Bee Detected"
+        "boolean": result == "Queen Bee Detected",
+        "probability": probability,
     }
