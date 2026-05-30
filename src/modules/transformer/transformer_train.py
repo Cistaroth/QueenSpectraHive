@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from modules.model_bases import TrainerBase
 from modules.transformer.transformer_model import AudioTransformer
@@ -120,13 +120,32 @@ class TransformerTrainModule(TrainerBase):
         if self._device.type == "cuda":
             torch.cuda.manual_seed_all(self._seed)
 
-    def _build_dataloader(self, x: pd.DataFrame, y: pd.Series) -> DataLoader:
+    def _build_dataloader(
+        self, x: pd.DataFrame, y: pd.Series, balanced: bool = False
+    ) -> DataLoader:
         """
         Build a dataloader from a feature frame and its labels.
+
+        When ``balanced`` is True, draw samples with a ``WeightedRandomSampler`` whose
+        per-sample weights are inversely proportional to class frequency, so each batch
+        is roughly 50/50 queen-present/absent. The sampler draws ``len(dataset)`` indices
+        with replacement and is re-shuffled every epoch, so it acts as on-the-fly
+        oversampling of the minority class (varied each epoch) rather than the static
+        duplication that bakes the same minority rows in once. This is the main fix for
+        majority-class collapse: with a tiny batch size and ~12% minority, most unbalanced
+        batches contain zero negatives, so the model never gets a gradient signal that
+        pushes it off the always-predict-positive solution. Balancing guarantees every
+        step sees both classes. Use it for the TRAIN loader only; validation must keep the
+        true class distribution so its metrics reflect real performance.
+
+        ``shuffle`` and ``sampler`` are mutually exclusive in ``DataLoader``, so shuffling
+        is only requested when no sampler is used (the sampler already randomises order).
 
         Args:
             x (pd.DataFrame): Feature frame.
             y (pd.Series): Labels.
+            balanced (bool): When True, use a class-balanced ``WeightedRandomSampler``
+                instead of uniform shuffling. Defaults to False.
 
         Returns:
             DataLoader: Dataloader yielding (features, labels) batches.
@@ -137,12 +156,41 @@ class TransformerTrainModule(TrainerBase):
             audio_dir=self._audio_dir,
             pretrained_model=self._pretrained_model,
         )
+
+        sampler = self._build_balanced_sampler(y) if balanced else None
         return DataLoader(
             dataset,
             batch_size=self._batch_size,
-            shuffle=True,
+            shuffle=(sampler is None),
+            sampler=sampler,
             num_workers=self._num_workers,
             pin_memory=(self._device.type == "cuda"),
+        )
+
+    def _build_balanced_sampler(self, y: pd.Series) -> WeightedRandomSampler:
+        """
+        Build a class-balanced sampler from a label series.
+
+        Each sample is weighted by the inverse of its class frequency, so the expected
+        number of draws per class is equal regardless of imbalance. The sampler draws
+        ``len(y)`` indices per epoch with replacement, re-randomising every epoch so the
+        minority class is oversampled with variety rather than fixed duplication.
+
+        Args:
+            y (pd.Series): Labels for the samples in dataset order.
+
+        Returns:
+            WeightedRandomSampler: Sampler producing approximately class-balanced batches.
+        """
+        labels = y.astype(int).to_numpy()
+        class_counts = np.bincount(labels)
+        # Inverse-frequency weight per class; guard against an absent class (count 0).
+        class_weights = 1.0 / np.clip(class_counts, 1, None)
+        sample_weights = class_weights[labels]
+        return WeightedRandomSampler(
+            weights=torch.as_tensor(sample_weights, dtype=torch.double),
+            num_samples=len(sample_weights),
+            replacement=True,
         )
 
     def _save_model(self, model: AudioTransformer) -> None:
@@ -351,7 +399,10 @@ class TransformerTrainModule(TrainerBase):
                 logger.info("No validation data provided - validation will be skipped.")
             logger.info("Building dataloaders...")
 
-        train_loader = self._build_dataloader(x_train, y_train)
+        # Balance only the TRAIN loader: each batch is drawn ~50/50 per class so every
+        # gradient step sees negatives. Validation keeps the true distribution so its
+        # metrics (and the prediction counts logged per epoch) stay honest.
+        train_loader = self._build_dataloader(x_train, y_train, balanced=True)
         val_loader = self._build_dataloader(x_val, y_val) if has_val else None
 
         model = AudioTransformer(
@@ -361,13 +412,15 @@ class TransformerTrainModule(TrainerBase):
             unfreeze_last_n_layers=self._unfreeze_last_n_layers,
         ).to(self._device)
 
-        # Compute pos_weight from the training labels so the loss compensates
-        # for class imbalance without needing to oversample the minority class.
-        # pos_weight = n_negative / n_positive (clamped to avoid div-by-zero).
+        # Imbalance is corrected by the class-balanced sampler on the train loader, so
+        # each batch is already ~50/50. Applying pos_weight on top would double-correct
+        # and bias the model toward the (now over-represented) negative class, so the
+        # loss uses a neutral pos_weight of 1.0. The raw class counts are still logged
+        # for visibility.
         y_train_int = y_train.astype(int)
         n_pos = int((y_train_int == 1).sum())
         n_neg = int((y_train_int == 0).sum())
-        pos_weight_value = n_neg / max(n_pos, 1)
+        pos_weight_value = 1.0
         pos_weight = torch.tensor(
             [pos_weight_value], device=self._device, dtype=torch.float32
         )
@@ -375,7 +428,7 @@ class TransformerTrainModule(TrainerBase):
         if verbose:
             logger.info(
                 f"Class counts in y_train: pos={n_pos}, neg={n_neg} "
-                f"-> pos_weight={pos_weight_value:.4f}"
+                f"-> class-balanced sampler active, pos_weight={pos_weight_value:.4f} (neutral)"
             )
 
         criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
