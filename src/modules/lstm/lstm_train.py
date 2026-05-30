@@ -1,3 +1,4 @@
+import copy
 import random
 from pathlib import Path
 
@@ -152,6 +153,10 @@ class FusionLSTMTrainModule(TrainerBase):
         """
         Run the full training loop over all epochs.
 
+        When a validation loader is provided, the weights that achieve the lowest
+        validation loss across all epochs are kept and restored into ``model`` at the
+        end of training, so a degenerate last-epoch state is never the one returned.
+
         Args:
             model (FusionLSTMModel): The model to train.
             train_loader (DataLoader): The data loader for training.
@@ -164,6 +169,10 @@ class FusionLSTMTrainModule(TrainerBase):
         Returns:
             None
         """
+        best_val_loss = float("inf")
+        best_state: dict | None = None
+        best_epoch: int | None = None
+
         for epoch in range(1, self._epochs + 1):
             model.train()
             running_loss = 0.0
@@ -195,13 +204,34 @@ class FusionLSTMTrainModule(TrainerBase):
             epoch_loss = running_loss / total
             epoch_acc = correct / total
 
-            val_loss, val_acc = self._evaluate(model, val_loader, criterion)
+            if val_loader is not None:
+                val_loss, val_acc = self._evaluate(model, val_loader, criterion)
 
-            if verbose:
+                # Track the best-val-loss weights so we can restore them later.
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    best_epoch = epoch
+                    best_state = copy.deepcopy(model.state_dict())
+
+                if verbose:
+                    logger.info(
+                        f"Epoch completed [{epoch:>3}/{self._epochs}]  "
+                        f"loss={epoch_loss:.4f}  acc={epoch_acc:.4f}    "
+                        f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}"
+                    )
+            elif verbose:
                 logger.info(
                     f"Epoch completed [{epoch:>3}/{self._epochs}]  "
-                    f"loss={epoch_loss:.4f}  acc={epoch_acc:.4f}    "
-                    f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}"
+                    f"loss={epoch_loss:.4f}  acc={epoch_acc:.4f}"
+                )
+
+        # Restore the best-val-loss weights (if validation was performed).
+        if best_state is not None:
+            model.load_state_dict(best_state)
+            if verbose:
+                logger.info(
+                    f"Restored best checkpoint from epoch {best_epoch} "
+                    f"(val_loss={best_val_loss:.4f})."
                 )
 
     @torch.no_grad()
@@ -244,6 +274,7 @@ class FusionLSTMTrainModule(TrainerBase):
         x_val: pd.DataFrame,
         y_val: pd.Series,
         verbose: bool = True,
+        save_model: bool = True,
     ) -> dict[str, FusionLSTMModel]:
         """
         Train the fused LSTM and MLP model.
@@ -254,6 +285,9 @@ class FusionLSTMTrainModule(TrainerBase):
             x_val (pd.DataFrame): Validation data.
             y_val (pd.Series): Validation labels.
             verbose (bool): Whether to log training progress. Defaults to True.
+            save_model (bool): Whether to persist the trained model to disk. Set to False
+                during cross-validation so only the final refit produces a checkpoint.
+                Defaults to True.
 
         Returns:
             dict[str, FusionLSTMModel]: A dictionary containing the trained model.
@@ -289,12 +323,15 @@ class FusionLSTMTrainModule(TrainerBase):
 
         if verbose:
             logger.info("Finished creating composite model.")
-            logger.info("Saving model...")
 
-        self._save_model(model)
-
-        if verbose:
-            logger.info("Model saved.")
+        if save_model:
+            if verbose:
+                logger.info("Saving model...")
+            self._save_model(model)
+            if verbose:
+                logger.info("Model saved.")
+        elif verbose:
+            logger.info("Skipping checkpoint persistence (save_model=False).")
 
         return {"model": model}
 
@@ -304,6 +341,7 @@ class FusionLSTMTrainModule(TrainerBase):
         y_train: pd.Series,
         x_val: pd.DataFrame,
         y_val: pd.Series,
+        save_model: bool = True,
     ) -> FusionLSTMModel:
         """
         Train and return the model without pipeline scaffolding.
@@ -313,8 +351,16 @@ class FusionLSTMTrainModule(TrainerBase):
             y_train (pd.Series): Training labels.
             x_val (pd.DataFrame): Validation data.
             y_val (pd.Series): Validation labels.
+            save_model (bool): Whether to persist the trained model to disk. Defaults to True.
 
         Returns:
             FusionLSTMModel: The trained model.
         """
-        return self.run(x_train=x_train, y_train=y_train, x_val=x_val, y_val=y_val, verbose=True)["model"]
+        return self.run(
+            x_train=x_train,
+            y_train=y_train,
+            x_val=x_val,
+            y_val=y_val,
+            verbose=True,
+            save_model=save_model,
+        )["model"]

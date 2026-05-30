@@ -13,7 +13,13 @@ class AudioSplicerModule(ModelPipelineStep):
     inputs = {"x_train", "y_train"}
     outputs = {"x_train", "y_train"}
 
-    def __init__(self, audio_path_col: str, audio_dir: Path, chunk_duration: int = 15) -> None:
+    def __init__(
+        self,
+        audio_path_col: str,
+        audio_dir: Path,
+        chunk_duration: int = 15,
+        oversample: bool = True,
+    ) -> None:
         """
         Initializes the AudioSplicer class.
 
@@ -21,6 +27,10 @@ class AudioSplicerModule(ModelPipelineStep):
             audio_path_col (str): The column name identifying audio file tracks.
             audio_dir (Path): The path to the audio files
             chunk_duration (int, optional): The target slice window in seconds. Defaults to 15.
+            oversample (bool, optional): If True, balance classes by duplicating minority-class
+                rows with replacement (legacy behaviour). If False, leave the class distribution
+                untouched and rely on a downstream weighting scheme (e.g. pos_weight in
+                BCEWithLogitsLoss) to handle imbalance. Defaults to True.
         Returns:
             None
         """
@@ -29,6 +39,7 @@ class AudioSplicerModule(ModelPipelineStep):
         self._chunk_duration = chunk_duration
         self._audio_col = audio_path_col
         self._audio_dir = audio_dir
+        self._oversample = oversample
 
     def _get_random_slice(self, file_path: str) -> tuple[int, int]:
         """
@@ -135,6 +146,14 @@ class AudioSplicerModule(ModelPipelineStep):
                 logger.info("SMOTE detected in previous step.\n"
                             "Creating splices over synthetic rows..."
                             )
+        elif not self._oversample:
+            if verbose:
+                logger.info(
+                    "Oversampling disabled. \n"
+                    f"Keeping original class distribution: \n: {y_train.value_counts()}"
+                    "\nClass imbalance should be handled downstream "
+                    "(e.g. pos_weight in BCEWithLogitsLoss)."
+                )
         else:
             if verbose:
                 logger.info("SMOTE not detected. \n"

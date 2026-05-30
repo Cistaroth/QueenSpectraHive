@@ -121,6 +121,7 @@ class TabularTrainValidationTestSplitterModule(ModelPipelineStep):
             target,
             test_size=self._train_test_split,
             random_state=self._random_state,
+            stratify=target,
         )
 
         x_train, x_val, y_train, y_val = train_test_split(
@@ -128,6 +129,7 @@ class TabularTrainValidationTestSplitterModule(ModelPipelineStep):
             y_train,
             test_size=self._train_validation_split,
             random_state=self._random_state,
+            stratify=y_train,
         )
 
         x_train = cast(pd.DataFrame, x_train)
@@ -205,11 +207,15 @@ class TabularTrainTestSplitterModule(ModelPipelineStep):
         if verbose:
             console.section("Splitting dataframe into train and test")
 
+        # Stratify on the target so the held-out test set keeps the original
+        # class proportions. Without this, "always predict majority" can
+        # happen to score well on test and mask a degenerate model.
         x_train, x_test, y_train, y_test = train_test_split(
             features,
             target,
             test_size=self._train_test_split,
             random_state=self._random_state,
+            stratify=target,
         )
 
         x_train = cast(pd.DataFrame, x_train)

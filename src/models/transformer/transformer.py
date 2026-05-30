@@ -59,6 +59,7 @@ def main() -> None:
                 audio_path_col=settings.AUDIO_PATH_COL,
                 audio_dir=settings.AUDIO_DIR,
                 chunk_duration=settings.CHUNK_DURATION,
+                oversample=False,
             ),
  
             HyperparameterTuningStratifiedKFoldModule(

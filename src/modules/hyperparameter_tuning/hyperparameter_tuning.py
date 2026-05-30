@@ -1,3 +1,4 @@
+import inspect
 from typing import Any
 
 import numpy as np
@@ -19,7 +20,7 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, train_test_split
 
 from config import config
 from logger import console, logger
@@ -63,6 +64,26 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
                 f"Metric {self._model_configuration.metric} not supported. "
                 f"Supported metrics: {supported_metrics}"
             )
+
+    def _train_param_names(self, trainer: Any) -> set[str]:
+        """
+        Return the set of parameter names accepted by a trainer's ``train`` method.
+
+        Used to decide, at runtime, whether a given trainer supports optional
+        arguments such as ``x_val``/``y_val`` (for validation-based checkpoint
+        selection) or ``save_model`` (for controlling disk persistence). This keeps
+        the tuning loop generic across trainers with different ``train`` signatures
+        (e.g. the logistic-regression trainer takes no validation set).
+
+        Args:
+            trainer (Any): A trainer instance exposing a ``train`` method.
+        Returns:
+            set[str]: Parameter names of ``trainer.train``.
+        """
+        try:
+            return set(inspect.signature(trainer.train).parameters)
+        except (TypeError, ValueError):
+            return set()
 
     def _get_varying_keys(
         self,
@@ -263,9 +284,18 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
                         x_train_transformed = transformer.fit_transform(x_train_fold)
                         x_val_transformed = transformer.transform(x_val_fold)
 
-                        # Train the model on the training fold and evaluate on the validation fold
+                        # Train the model on the training fold and evaluate on the validation fold.
+                        # Do NOT persist per-fold checkpoints to disk - only the final refit
+                        # below should produce a saved model (passed save_model=False when supported).
                         trainer = cfg.model_train(**model_parameter)
-                        model = trainer.train(x_train_transformed, y_train_fold, x_val_transformed, y_val_fold)
+                        fold_kwargs = (
+                            {"save_model": False}
+                            if "save_model" in self._train_param_names(trainer)
+                            else {}
+                        )
+                        model = trainer.train(
+                            x_train_transformed, y_train_fold, x_val_transformed, y_val_fold, **fold_kwargs
+                        )
 
                         inferencer = cfg.model_inference()
                         y_pred = inferencer.inference(model, x_val_transformed)
@@ -301,16 +331,45 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
             )
             console.print()
             logger.info(
-                "Starting refitting transformer and training final model on full training set."
+                "Starting refitting transformer and training the final model."
             )
 
-        # Refit the transformer on the full training set with the best transformer parameters
+        # Train the final model with the best parameters. This is the ONLY model that
+        # gets persisted to disk (save_model=True when the trainer supports it).
         final_transformer = cfg.transformer(**best_result["transformer_parameter"])
-        x_train_transformed = final_transformer.fit_transform(x=x_train)
-
-        # Train the final model with the best parameters
         final_trainer = cfg.model_train(**best_result["model_parameter"])
-        best_model = final_trainer.train(x_train_transformed, y_train)
+        train_params = self._train_param_names(final_trainer)
+        supports_val = {"x_val", "y_val"}.issubset(train_params)
+        save_kwargs = {"save_model": True} if "save_model" in train_params else {}
+
+        if supports_val:
+            # Carve a stratified validation holdout from the training set so the
+            # trainer's best-val-loss checkpoint selection is meaningful for the
+            # persisted model (rather than just keeping the last epoch).
+            x_fit, x_holdout, y_fit, y_holdout = train_test_split(
+                x_train,
+                y_train,
+                test_size=config.TRAIN_VALIDATION_SPLIT,
+                random_state=config.SEED,
+                stratify=y_train,
+            )
+            x_train_transformed = final_transformer.fit_transform(x=x_fit)
+            x_holdout_transformed = final_transformer.transform(x_holdout)
+
+            if verbose:
+                logger.info(
+                    f"Final refit on {len(x_fit):,} samples with a "
+                    f"{len(x_holdout):,}-sample validation holdout for checkpoint selection."
+                )
+
+            best_model = final_trainer.train(
+                x_train_transformed, y_fit, x_holdout_transformed, y_holdout, **save_kwargs
+            )
+        else:
+            # Trainer has no concept of a validation set (e.g. logistic regression);
+            # refit on the full training set as before.
+            x_train_transformed = final_transformer.fit_transform(x=x_train)
+            best_model = final_trainer.train(x_train_transformed, y_train, **save_kwargs)
 
         if verbose:
             logger.info("Finished hyperparameter tuning.")

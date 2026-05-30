@@ -1,3 +1,4 @@
+import copy
 import random
 from pathlib import Path
 
@@ -146,6 +147,12 @@ class TransformerTrainModule(TrainerBase):
         """
         Run the full training loop over all epochs.
 
+        When a validation loader is provided, the weights that achieve the lowest
+        validation loss across all epochs are kept and restored into ``model`` at the
+        end of training. This avoids serving a degenerate last-epoch checkpoint (e.g.
+        one that collapsed to always predicting the majority class). Without a
+        validation loader, the final-epoch weights are used as-is.
+
         Args:
             model (AudioTransformer): The model to train.
             train_loader (DataLoader): The data loader for training.
@@ -159,6 +166,10 @@ class TransformerTrainModule(TrainerBase):
         Returns:
             None
         """
+        best_val_loss = float("inf")
+        best_state: dict | None = None
+        best_epoch: int | None = None
+
         for epoch in range(1, self._epochs + 1):
             model.train()
             running_loss = 0.0
@@ -191,6 +202,13 @@ class TransformerTrainModule(TrainerBase):
 
             if val_loader is not None:
                 val_loss, val_acc = self._evaluate(model, val_loader, criterion)
+
+                # Track the best-val-loss weights so we can restore them later.
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    best_epoch = epoch
+                    best_state = copy.deepcopy(model.state_dict())
+
                 if verbose:
                     logger.info(
                         f"Epoch completed [{epoch:>3}/{self._epochs}]  "
@@ -201,6 +219,15 @@ class TransformerTrainModule(TrainerBase):
                 logger.info(
                     f"Epoch completed [{epoch:>3}/{self._epochs}]  "
                     f"loss={epoch_loss:.4f}  acc={epoch_acc:.4f}"
+                )
+
+        # Restore the best-val-loss weights (if validation was performed).
+        if best_state is not None:
+            model.load_state_dict(best_state)
+            if verbose:
+                logger.info(
+                    f"Restored best checkpoint from epoch {best_epoch} "
+                    f"(val_loss={best_val_loss:.4f})."
                 )
 
     @torch.no_grad()
@@ -242,6 +269,7 @@ class TransformerTrainModule(TrainerBase):
         x_val: pd.DataFrame | None = None,
         y_val: pd.Series | None = None,
         verbose: bool = True,
+        save_model: bool = True,
     ) -> dict[str, AudioTransformer]:
         """
         Fine-tune the pretrained AudioTransformer.
@@ -252,6 +280,9 @@ class TransformerTrainModule(TrainerBase):
             x_val (pd.DataFrame | None): Validation data. If None, validation is skipped.
             y_val (pd.Series | None): Validation labels. If None, validation is skipped.
             verbose (bool): Whether to log training progress. Defaults to True.
+            save_model (bool): Whether to persist the trained model to disk. Set to False
+                during cross-validation so only the final refit produces a checkpoint.
+                Defaults to True.
 
         Returns:
             dict[str, AudioTransformer]: A dictionary containing the fine-tuned model.
@@ -278,7 +309,24 @@ class TransformerTrainModule(TrainerBase):
             pretrained_model=self._pretrained_model,
         ).to(self._device)
 
-        criterion = nn.BCEWithLogitsLoss()
+        # Compute pos_weight from the training labels so the loss compensates
+        # for class imbalance without needing to oversample the minority class.
+        # pos_weight = n_negative / n_positive (clamped to avoid div-by-zero).
+        y_train_int = y_train.astype(int)
+        n_pos = int((y_train_int == 1).sum())
+        n_neg = int((y_train_int == 0).sum())
+        pos_weight_value = n_neg / max(n_pos, 1)
+        pos_weight = torch.tensor(
+            [pos_weight_value], device=self._device, dtype=torch.float32
+        )
+
+        if verbose:
+            logger.info(
+                f"Class counts in y_train: pos={n_pos}, neg={n_neg} "
+                f"-> pos_weight={pos_weight_value:.4f}"
+            )
+
+        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
         optimiser = torch.optim.Adam(model.parameters(), lr=self._lr)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimiser, T_max=self._epochs)
 
@@ -289,12 +337,15 @@ class TransformerTrainModule(TrainerBase):
 
         if verbose:
             logger.info("Finished fine-tuning Audio Spectrogram Transformer.")
-            logger.info("Saving model...")
 
-        self._save_model(model)
-
-        if verbose:
-            logger.info("Model saved.")
+        if save_model:
+            if verbose:
+                logger.info("Saving model...")
+            self._save_model(model)
+            if verbose:
+                logger.info("Model saved.")
+        elif verbose:
+            logger.info("Skipping checkpoint persistence (save_model=False).")
 
         return {"model": model}
 
@@ -304,6 +355,7 @@ class TransformerTrainModule(TrainerBase):
         y_train: pd.Series,
         x_val: pd.DataFrame | None = None,
         y_val: pd.Series | None = None,
+        save_model: bool = True,
     ) -> AudioTransformer:
         """
         Fine-tune and return the model without pipeline scaffolding.
@@ -313,8 +365,16 @@ class TransformerTrainModule(TrainerBase):
             y_train (pd.Series): Training labels.
             x_val (pd.DataFrame | None): Validation data. If None, validation is skipped.
             y_val (pd.Series | None): Validation labels. If None, validation is skipped.
+            save_model (bool): Whether to persist the trained model to disk. Defaults to True.
 
         Returns:
             AudioTransformer: The fine-tuned model.
         """
-        return self.run(x_train=x_train, y_train=y_train, x_val=x_val, y_val=y_val, verbose=True)["model"]
+        return self.run(
+            x_train=x_train,
+            y_train=y_train,
+            x_val=x_val,
+            y_val=y_val,
+            verbose=True,
+            save_model=save_model,
+        )["model"]
