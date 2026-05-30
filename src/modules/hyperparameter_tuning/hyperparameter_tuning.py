@@ -1,4 +1,5 @@
 import inspect
+from functools import partial
 from typing import Any
 
 import numpy as np
@@ -15,6 +16,7 @@ from rich.progress import (
 from rich.table import Table
 from sklearn.metrics import (
     accuracy_score,
+    balanced_accuracy_score,
     f1_score,
     precision_score,
     recall_score,
@@ -50,9 +52,16 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
 
         self._model_configuration = model_configuration
 
+        # NOTE: on an imbalanced binary problem, plain "accuracy" and binary "f1"
+        # (pos_label=1) both reward a model that collapses to always predicting the
+        # majority class. "balanced_accuracy" (mean per-class recall) and "f1_macro"
+        # (unweighted mean of per-class F1) penalise that collapse, so they are the
+        # right model-selection objectives here.
         self._metrics = {
             "accuracy": accuracy_score,
+            "balanced_accuracy": balanced_accuracy_score,
             "f1": f1_score,
+            "f1_macro": partial(f1_score, average="macro"),
             "precision": precision_score,
             "recall": recall_score,
             "roc_auc": roc_auc_score,

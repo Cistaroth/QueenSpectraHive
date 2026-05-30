@@ -67,9 +67,20 @@ class AudioTransformerSettings(BaseModel):
             "pretrained_model": ["MIT/ast-finetuned-audioset-10-10-0.4593"],
             "epochs":         [7],
             "batch_size":     [2],
+            # Freeze the pretrained AST backbone and train only the head. This is the
+            # main fix for the majority-class collapse: full-backbone fine-tuning at
+            # 1e-4 on ~63 minority samples wrecks the pretrained features and the model
+            # falls back to always predicting "queen present".
+            "freeze_backbone":      [True],
+            "head_learning_rate":   [1e-3],
+            # Only used if freeze_backbone is set False (kept small on purpose).
+            "backbone_learning_rate": [1e-5],
             "learning_rate":  [1e-4],
         },
-        metric="accuracy",
+        # balanced_accuracy (mean per-class recall) instead of raw accuracy, so a
+        # model that collapses to the majority class scores ~0.5 and cannot win
+        # selection just by exploiting the 87.6% class imbalance.
+        metric="balanced_accuracy",
     )
 
     class_names: list[str] = ["Queen Absent", "Queen Present"]

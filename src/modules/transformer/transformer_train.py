@@ -32,6 +32,9 @@ class TransformerTrainModule(TrainerBase):
         epochs: int = 20,
         batch_size: int = 16,
         learning_rate: float = 1e-4,
+        freeze_backbone: bool = True,
+        head_learning_rate: float | None = None,
+        backbone_learning_rate: float = 1e-5,
         num_workers: int = 0,
         audio_path_col: str = "path",
         device: str | None = None,
@@ -47,7 +50,18 @@ class TransformerTrainModule(TrainerBase):
             pretrained_model (str): Hugging Face model ID for the AST feature extractor.
             epochs (int): Number of epochs.
             batch_size (int): Batch size.
-            learning_rate (float): Learning rate.
+            learning_rate (float): Backbone learning rate fallback. Used as the head
+                learning rate when ``head_learning_rate`` is None, and (when the
+                backbone is unfrozen) only matters via ``backbone_learning_rate``.
+            freeze_backbone (bool): When True, freeze the pretrained AST backbone and
+                train only the classification head. This is the main guard against the
+                model collapsing to always predicting the majority class on a small,
+                imbalanced dataset. Defaults to True.
+            head_learning_rate (float | None): Learning rate for the classification
+                head. Defaults to None, in which case ``learning_rate`` is used.
+            backbone_learning_rate (float): Learning rate for the backbone when it is
+                unfrozen (``freeze_backbone=False``). Kept deliberately small so
+                fine-tuning does not wreck the pretrained features. Defaults to 1e-5.
             num_workers (int): Number of workers for data loading.
             audio_path_col (str): Name of the column containing the audio file paths.
             device (str | None): Device to train on. Defaults to None.
@@ -65,6 +79,9 @@ class TransformerTrainModule(TrainerBase):
         self._epochs = epochs
         self._batch_size = batch_size
         self._lr = learning_rate
+        self._freeze_backbone = freeze_backbone
+        self._head_lr = head_learning_rate
+        self._backbone_lr = backbone_learning_rate
         self._num_workers = num_workers
         self._audio_path_col = audio_path_col
         self._seed = seed
@@ -307,6 +324,7 @@ class TransformerTrainModule(TrainerBase):
         model = AudioTransformer(
             num_classes=self._num_classes,
             pretrained_model=self._pretrained_model,
+            freeze_backbone=self._freeze_backbone,
         ).to(self._device)
 
         # Compute pos_weight from the training labels so the loss compensates
@@ -327,10 +345,26 @@ class TransformerTrainModule(TrainerBase):
             )
 
         criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-        optimiser = torch.optim.Adam(model.parameters(), lr=self._lr)
+
+        # Use separate learning rates for the head and the backbone. When the
+        # backbone is frozen, parameter_groups returns a single head group, so only
+        # the head is optimised. When unfrozen, the backbone trains at a much smaller
+        # LR so fine-tuning does not destabilise the pretrained features.
+        head_lr = self._head_lr if self._head_lr is not None else self._lr
+        param_groups = model.parameter_groups(head_lr=head_lr, backbone_lr=self._backbone_lr)
+        optimiser = torch.optim.Adam(param_groups)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimiser, T_max=self._epochs)
 
         if verbose:
+            n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+            n_total = sum(p.numel() for p in model.parameters())
+            logger.info(
+                f"Backbone {'frozen' if self._freeze_backbone else 'unfrozen'}; "
+                f"trainable params: {n_trainable:,}/{n_total:,} "
+                f"(head_lr={head_lr:g}"
+                + ("" if self._freeze_backbone else f", backbone_lr={self._backbone_lr:g}")
+                + ")"
+            )
             logger.info(f"Starting fine-tuning for {self._epochs} epochs...")
 
         self._train_loop(model, train_loader, val_loader, criterion, optimiser, scheduler, verbose)
