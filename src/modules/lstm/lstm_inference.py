@@ -66,7 +66,8 @@ class FusionLSTMInferenceModule(InferencerBase):
             audio_dir=self._audio_dir,
             n_mfcc=self._n_mfcc
         )
-        return DataLoader(
+        print(f"[inference _build_loader] dataset size: {len(dataset)}, collate_fn: {lstm_collate_fn}")
+        loader = DataLoader(
             dataset,
             batch_size=self._batch_size,
             shuffle=False,
@@ -74,6 +75,8 @@ class FusionLSTMInferenceModule(InferencerBase):
             pin_memory=(self._device.type == "cuda"),
             collate_fn=lstm_collate_fn,
         )
+        print(f"[inference _build_loader] loader.collate_fn: {loader.collate_fn}")
+        return loader
 
     def run(
         self,

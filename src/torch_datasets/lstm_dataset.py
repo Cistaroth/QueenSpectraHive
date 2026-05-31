@@ -10,9 +10,12 @@ from torch_datasets.datasets_base import BeeAudioDataset
 
 
 def lstm_collate_fn(batch):
+    print(f"[lstm_collate_fn] called with {len(batch)} samples")
     mels, tabulars, labels = zip(*batch)
+    print(f"[lstm_collate_fn] mel shapes: {[m.shape for m in mels]}")
     max_len = max(m.shape[0] for m in mels)
     padded_mels = torch.stack([F.pad(m, (0, 0, 0, max_len - m.shape[0])) for m in mels])
+    print(f"[lstm_collate_fn] padded batch shape: {padded_mels.shape}")
     return padded_mels, torch.stack(tabulars), torch.stack(labels)
 
 

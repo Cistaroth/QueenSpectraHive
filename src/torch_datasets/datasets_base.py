@@ -33,18 +33,40 @@ class BeeAudioDataset(LazyAudioDataset):
         Returns:
             None
         """
+        self._audio_dir = Path(audio_dir)
+        features, labels = self._drop_missing_audio(features, labels)
+
         if labels is None:
             self._labels = None
         else:
             self._labels = labels.reset_index(drop=True)
-
-        self._audio_dir = Path(audio_dir)
 
         loader_module = AudioDataLoaderModule(
             filepath=self._audio_dir,
             sample_rate=self.TARGET_SR,
         )
         self._lazy_dataset = loader_module.run(dataframe=features, verbose=False)["dataset"]
+
+    def _drop_missing_audio(
+        self,
+        features: pd.DataFrame,
+        labels,
+    ) -> tuple[pd.DataFrame, any]:
+        mask = features["file name"].apply(
+            lambda p: bool(list(self._audio_dir.glob(f"{Path(p).stem}__segment*.wav")))
+            if isinstance(p, str) else False
+        )
+        missing = (~mask).sum()
+        logger.info(f"Audio check: {len(features)} rows total, {missing} missing, {mask.sum()} kept.")
+        if missing:
+            logger.warning(
+                f"Dropping {missing} row(s) with no audio segments on disk: "
+                + str(features.loc[~mask, 'file name'].tolist())
+            )
+        features = features[mask].reset_index(drop=True)
+        if labels is not None:
+            labels = labels[mask].reset_index(drop=True)
+        return features, labels
 
     def __len__(self) -> int:
         """
