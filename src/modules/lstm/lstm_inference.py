@@ -79,7 +79,7 @@ class FusionLSTMInferenceModule(InferencerBase):
         self,
         model: FusionLSTMModel,
         x_test: pd.DataFrame,
-        verbose: bool = True,
+        verbose: bool = False,
     ) -> dict[str, np.ndarray]:
         """
         Run batch inference and return predictions + probabilities.

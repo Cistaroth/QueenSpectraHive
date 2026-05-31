@@ -349,11 +349,6 @@ uploadBtn.addEventListener('click', async () => {
     formData.append(key, val);
   }
 
-  const tabular = getTabularData();
-  for (const [key, val] of Object.entries(tabular)) {
-    formData.append(key, val);
-  }
-
   try {
     const res = await fetch('/spectral-inference', {
       method: 'POST',
@@ -368,7 +363,7 @@ uploadBtn.addEventListener('click', async () => {
     }
 
     const data = await res.json();
-    showResult(data['queen-detected'] === true, data.probability, null);
+    showResult(data.queen_presence === true, data.probability, null);
 
   } catch (err) {
     showResult(false, null, 'Could not reach the inference service. Please check your connection and try again.');

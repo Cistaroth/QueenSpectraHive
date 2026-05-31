@@ -1,5 +1,4 @@
-from typing import Optional
-
+from pydantic import BaseModel
 from fastapi import File, Form, UploadFile
 from fastapi.exceptions import HTTPException
 from fastapi.routing import APIRouter
@@ -10,31 +9,34 @@ router = APIRouter()
 
 _WAV_TYPES = {"audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"}
 
+class ResponseModel(BaseModel):
+    queen_presence: bool
+    probability: float
+
 
 @router.post(
     "/spectral-inference",
     description="Queen Bee Presence Classifier Endpoint for Inference on Spectral Data. Files must be in WAV format.",
-    response_model=dict[str, bool | float],
+    response_model=ResponseModel,
     response_description=(
-        "Returns a message indicating whether a queen bee was detected in the provided audio file. "
-        "Also includes a boolean field for easier programmatic use."
+        "Queen Bee Presence Classifier Response Model with Queen Presence (Boolean) and Queen Presence Probability (Float)"
     ),
 )
 async def spectral_inference(
     file: UploadFile = File(..., description="WAV audio recording of the hive"),
-    hive_temp: Optional[float] = Form(None, description="Hive temperature (°C)"),
-    hive_humidity: Optional[float] = Form(None, description="Hive relative humidity (%)"),
-    hive_pressure: Optional[float] = Form(None, description="Hive atmospheric pressure (hPa)"),
-    frames: Optional[int] = Form(None, description="Number of frames in the hive"),
-    weather_temp: Optional[float] = Form(None, description="Outdoor temperature (°C)"),
-    weather_humidity: Optional[float] = Form(None, description="Outdoor relative humidity (%)"),
-    weather_pressure: Optional[float] = Form(None, description="Outdoor atmospheric pressure (hPa)"),
-    wind_speed: Optional[float] = Form(None, description="Wind speed (m/s)"),
-    cloud_coverage: Optional[float] = Form(None, description="Cloud coverage (%)"),
-    date: Optional[str] = Form(None, description="Recording datetime in ISO 8601 format"),
-    device: Optional[int] = Form(None, description="Device number (1 or 2)"),
-    hive_number: Optional[int] = Form(None, description="Hive number (1-5)"),
-) -> dict[str, str | bool | float]:
+    hive_temp: float = Form(None, description="Hive temperature (°C)"),
+    hive_humidity: float = Form(None, description="Hive relative humidity (%)"),
+    hive_pressure: float | None = Form(None, description="Hive atmospheric pressure (hPa)"),
+    frames: int | None = Form(None, description="Number of frames in the hive"),
+    weather_temp: float | None = Form(None, description="Outdoor temperature (°C)"),
+    weather_humidity: float | None = Form(None, description="Outdoor relative humidity (%)"),
+    weather_pressure: float | None = Form(None, description="Outdoor atmospheric pressure (hPa)"),
+    wind_speed: float | None = Form(None, description="Wind speed (m/s)"),
+    cloud_coverage: float | None = Form(None, description="Cloud coverage (%)"),
+    date: str | None = Form(None, description="Recording datetime in ISO 8601 format"),
+    device: int | None = Form(None, description="Device number (1 or 2)"),
+    hive_number: int = Form(None, description="Hive number (1-5)"),
+) -> ResponseModel:
     content_type_ok = file.content_type in _WAV_TYPES
     filename_ok = (file.filename or "").lower().endswith(".wav")
     if not content_type_ok and not filename_ok:
@@ -62,8 +64,6 @@ async def spectral_inference(
         result = pipeline_result["y_pred"][0]
         probability = float(pipeline_result["y_pred_proba"][0])
 
-        print(pipeline_result)
-
     except Exception as e:
         print("Error during inference:", e)
         raise HTTPException(
@@ -71,7 +71,4 @@ async def spectral_inference(
             detail="An error occurred during inference. Please try again later.",
         )
 
-    return {
-        "queen-detected": bool(result),
-        "probability": probability,
-    }
+    return ResponseModel(queen_presence=result, probability=probability)

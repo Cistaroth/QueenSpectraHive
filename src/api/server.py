@@ -11,7 +11,7 @@ from api.routers.spectral_inference.spectral_inference import (
 from config import config
 
 app = FastAPI(
-    title=config.NAME + " API Server",
+    title=config.APP_NAME + " API Server",
     description=config.API_DESCRIPTION,
     version=config.API_VERSION,
 )

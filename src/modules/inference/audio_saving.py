@@ -19,6 +19,8 @@ class AudioSavingModule(ModelPipelineStep):
     FEATURE_COLUMNS = [
         "hive temp", "hive humidity", "hive pressure",
         "frames",
+        "weather temp", "weather humidity", "weather pressure",
+        "wind speed", "cloud coverage",
         "hour_sin", "hour_cos",
         "minute_sin", "minute_cos",
         "day_sin", "day_cos",
@@ -28,10 +30,15 @@ class AudioSavingModule(ModelPipelineStep):
     ]
 
     _NUMERIC_MAP = [
-        ("hive_temp",     "hive temp"),
-        ("hive_humidity", "hive humidity"),
-        ("hive_pressure", "hive pressure"),
-        ("frames",        "frames"),
+        ("hive_temp",         "hive temp"),
+        ("hive_humidity",     "hive humidity"),
+        ("hive_pressure",     "hive pressure"),
+        ("frames",            "frames"),
+        ("weather_temp",      "weather temp"),
+        ("weather_humidity",  "weather humidity"),
+        ("weather_pressure",  "weather pressure"),
+        ("wind_speed",        "wind speed"),
+        ("cloud_coverage",    "cloud coverage"),
     ]
 
     def __init__(
@@ -47,7 +54,7 @@ class AudioSavingModule(ModelPipelineStep):
         self,
         file: UploadFile,
         tabular_data: dict,
-        verbose: bool = True,
+        verbose: bool = False,
     ) -> dict[str, pd.DataFrame]:
         if verbose:
             console.section(title="Saving audio file")

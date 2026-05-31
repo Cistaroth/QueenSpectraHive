@@ -13,7 +13,7 @@ MODEL_PATH = Path(__file__).parents[4] / "trained_models" / "lstm" / "lstm_model
 _model = FusionLSTMModel(
     lstm_layers=(40, 64, 2, 0.4),
     features_input_size=32,
-    embeddings_model=(nn.Linear(16, 64), nn.ReLU(), nn.Linear(64, 32)),
+    embeddings_model=(nn.Linear(21, 64), nn.ReLU(), nn.Linear(64, 32)),
     ff_hidden_size=64,
 )
 _model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
@@ -24,4 +24,6 @@ INFERENCE_PIPELINE = ModelPipeline(
         AudioSavingModule(),
         FusionLSTMInferenceModule(drop_column=["file name", "start_sec", "end_sec"]),
     ]
-).add_context(step=1, context={"model": _model})
+).add_context(step=1, context={"model": _model, "verbose": False}).add_context(
+    step=0, context={"verbose": False}
+)

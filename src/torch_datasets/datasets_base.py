@@ -63,7 +63,9 @@ class BeeAudioDataset(LazyAudioDataset):
 
         mask = features["file name"].apply(_has_audio)
         missing = (~mask).sum()
-        logger.info(f"Audio check: {len(features)} rows total, {missing} missing, {mask.sum()} kept.")
+        
+        # if verbose:
+        # logger.info(f"Audio check: {len(features)} rows total, {missing} missing, {mask.sum()} kept.")
         if missing:
             logger.warning(
                 f"Dropping {missing} row(s) with no audio segments on disk: "
