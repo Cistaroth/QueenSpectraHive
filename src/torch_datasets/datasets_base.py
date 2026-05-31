@@ -93,7 +93,7 @@ class BeeAudioDataset(LazyAudioDataset):
         if self._labels is None:
             label = torch.tensor(-1, dtype=torch.long)
         else:
-            label = int(self._labels.iloc[idx])
+            label = torch.tensor(int(self._labels.iloc[idx]), dtype=torch.long)
 
         try:
             # Get waveform from LazyAudioDataset via AudioDataLoaderModule (shape: [channels, time])
