@@ -298,7 +298,7 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
                         # synthetic training samples.
                         if cfg.resampler is not None:
                             resampler = cfg.resampler()
-                            resampled = resampler.run(x_train_transformed, y_train_fold, verbose=False)
+                            resampled = resampler.run(x_train_transformed, y_train_fold, verbose=True)
                             x_train_transformed = resampled["x_train"]
                             y_train_fold = resampled["y_train"]
 
