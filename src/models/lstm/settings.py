@@ -35,6 +35,11 @@ class FusionLSTMSettings(BaseModel):
     AUDIO_PATH_COL: str = "file name"
     TARGET_COLUMN: str = "queen presence"
 
+    # Rows are not independent: queen presence is near-constant within a hive over long
+    # time blocks, so a random split leaks near-duplicate recordings across train/test.
+    # Split by hive instead, holding whole hives out, for an honest estimate.
+    GROUP_COLUMN: str = "hive number"
+
     # Tabular feature engineering
     TIME_COLUMN: str = "date"
     TIME_FEATURES: list[str] = ["hour", "minute", "day", "day_of_week", "week_of_year"]
@@ -63,6 +68,11 @@ class FusionLSTMSettings(BaseModel):
         model_inference=FusionLSTMInferenceModule,
         transformer=TabularStandardScalerModule,
         resampler=TabularSMOTE,
+        resampler_parameters={
+            "audio_dir": AUDIO_DIR,
+            "chunk_duration": CHUNK_DURATION,
+        },
+        group_column=GROUP_COLUMN,
         transformer_hyperparameters={
             "columns_to_exclude": [["file name", "start_sec", "end_sec"]],
         },

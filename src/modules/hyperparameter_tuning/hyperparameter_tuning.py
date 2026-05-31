@@ -22,7 +22,12 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.model_selection import (
+    GroupShuffleSplit,
+    StratifiedGroupKFold,
+    StratifiedKFold,
+    train_test_split,
+)
 
 from config import config
 from logger import console, logger
@@ -73,6 +78,33 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
                 f"Metric {self._model_configuration.metric} not supported. "
                 f"Supported metrics: {supported_metrics}"
             )
+
+    def _extract_groups(self, x_train: pd.DataFrame) -> np.ndarray | None:
+        """
+        Build a per-row group id from the configured group column.
+
+        By the time tuning runs the group column has usually been one-hot encoded
+        (e.g. ``hive number`` -> ``hive number_3``/``_4``/``_5``), so the raw column may
+        be gone. This reconstructs a stable group key from either the raw column or its
+        one-hot children, so grouped cross-validation can keep every group on one side
+        of each fold. Returns None when no group column is configured or matched.
+
+        Args:
+            x_train (pd.DataFrame): The training features.
+        Returns:
+            np.ndarray | None: Group label per row, or None if grouping is unavailable.
+        """
+        group_column = self._model_configuration.group_column
+        if not group_column:
+            return None
+        cols = [
+            c
+            for c in x_train.columns
+            if c == group_column or c.startswith(f"{group_column}_")
+        ]
+        if not cols:
+            return None
+        return x_train[cols].astype(str).agg("|".join, axis=1).to_numpy()
 
     def _train_param_names(self, trainer: Any) -> set[str]:
         """
@@ -229,12 +261,32 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
             )
             console.print()
 
-        # Set up stratified k-fold cross-validation and run the tuning process
-        folds = StratifiedKFold(
-            n_splits=cfg.folds,
-            shuffle=True,
-            random_state=config.SEED,
-        )
+        # Build a group key (e.g. one per hive) when configured, so folds never put
+        # near-duplicate rows from the same group on both sides of the split. Falls
+        # back to plain stratified k-fold when no groups are available or there are
+        # too few groups to fill the requested number of folds.
+        groups = self._extract_groups(x_train)
+        n_groups = len(np.unique(groups)) if groups is not None else 0
+        use_grouped_cv = groups is not None and n_groups >= cfg.folds
+
+        if use_grouped_cv:
+            folds = StratifiedGroupKFold(
+                n_splits=cfg.folds,
+                shuffle=True,
+                random_state=config.SEED,
+            )
+        else:
+            if groups is not None and not use_grouped_cv and verbose:
+                logger.warning(
+                    f"Only {n_groups} group(s) for '{cfg.group_column}' but {cfg.folds} "
+                    f"folds requested; falling back to (leaky) stratified k-fold for CV. "
+                    f"The held-out test split remains group-aware."
+                )
+            folds = StratifiedKFold(
+                n_splits=cfg.folds,
+                shuffle=True,
+                random_state=config.SEED,
+            )
         cv_results: list[dict[str, Any]] = []
 
         # Build progress bar for tuning process
@@ -278,9 +330,10 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
                         ),
                     )
 
-                    # Run cross-validation for the current set of model parameters
+                    # Run cross-validation for the current set of model parameters.
+                    # StratifiedKFold ignores ``groups``; StratifiedGroupKFold uses it.
                     fold_scores: list[float] = []
-                    for train_idx, val_idx in folds.split(x_train, y_train):
+                    for train_idx, val_idx in folds.split(x_train, y_train, groups=groups):
                         # Get the training and validation folds
                         x_train_fold = x_train.iloc[train_idx]
                         x_val_fold = x_train.iloc[val_idx]
@@ -297,7 +350,7 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
                         # after scaling, to prevent val-fold statistics leaking into
                         # synthetic training samples.
                         if cfg.resampler is not None:
-                            resampler = cfg.resampler()
+                            resampler = cfg.resampler(**cfg.resampler_parameters)
                             resampled = resampler.run(x_train_transformed, y_train_fold, verbose=True)
                             x_train_transformed = resampled["x_train"]
                             y_train_fold = resampled["y_train"]
@@ -361,22 +414,45 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
         save_kwargs = {"save_model": True} if "save_model" in train_params else {}
 
         if supports_val:
-            # Carve a stratified validation holdout from the training set so the
-            # trainer's best-val-loss checkpoint selection is meaningful for the
-            # persisted model (rather than just keeping the last epoch).
-            x_fit, x_holdout, y_fit, y_holdout = train_test_split(
-                x_train,
-                y_train,
-                test_size=config.TRAIN_VALIDATION_SPLIT,
-                random_state=config.SEED,
-                stratify=y_train,
-            )
+            # Carve a validation holdout from the training set so the trainer's
+            # best-val-loss checkpoint selection is meaningful for the persisted model
+            # (rather than just keeping the last epoch). When grouping is available the
+            # holdout is also group-aware, so checkpoint selection isn't judged on rows
+            # that leak from the fit set.
+            if groups is not None and n_groups >= 2:
+                holdout_splitter = GroupShuffleSplit(
+                    n_splits=1,
+                    test_size=config.TRAIN_VALIDATION_SPLIT,
+                    random_state=config.SEED,
+                )
+                fit_idx, holdout_idx = next(
+                    holdout_splitter.split(x_train, y_train, groups=groups)
+                )
+                x_fit, x_holdout = x_train.iloc[fit_idx], x_train.iloc[holdout_idx]
+                y_fit, y_holdout = y_train.iloc[fit_idx], y_train.iloc[holdout_idx]
+            else:
+                x_fit, x_holdout, y_fit, y_holdout = train_test_split(
+                    x_train,
+                    y_train,
+                    test_size=config.TRAIN_VALIDATION_SPLIT,
+                    random_state=config.SEED,
+                    stratify=y_train,
+                )
             x_train_transformed = final_transformer.fit_transform(x=x_fit)
             x_holdout_transformed = final_transformer.transform(x_holdout)
 
+            # Resample the (scaled) training portion only, mirroring the CV loop, so the
+            # persisted model is trained on the same balanced distribution that was
+            # evaluated. The holdout is left untouched to keep checkpoint selection honest.
+            if cfg.resampler is not None:
+                resampler = cfg.resampler(**cfg.resampler_parameters)
+                resampled = resampler.run(x_train_transformed, y_fit, verbose=verbose)
+                x_train_transformed = resampled["x_train"]
+                y_fit = resampled["y_train"]
+
             if verbose:
                 logger.info(
-                    f"Final refit on {len(x_fit):,} samples with a "
+                    f"Final refit on {len(x_train_transformed):,} samples with a "
                     f"{len(x_holdout):,}-sample validation holdout for checkpoint selection."
                 )
 
@@ -387,7 +463,13 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
             # Trainer has no concept of a validation set (e.g. logistic regression);
             # refit on the full training set as before.
             x_train_transformed = final_transformer.fit_transform(x=x_train)
-            best_model = final_trainer.train(x_train_transformed, y_train, **save_kwargs)
+            y_refit = y_train
+            if cfg.resampler is not None:
+                resampler = cfg.resampler(**cfg.resampler_parameters)
+                resampled = resampler.run(x_train_transformed, y_train, verbose=verbose)
+                x_train_transformed = resampled["x_train"]
+                y_refit = resampled["y_train"]
+            best_model = final_trainer.train(x_train_transformed, y_refit, **save_kwargs)
 
         if verbose:
             logger.info("Finished hyperparameter tuning.")

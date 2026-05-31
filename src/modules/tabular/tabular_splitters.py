@@ -1,7 +1,7 @@
-from typing import cast 
+from typing import cast
 
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
 from pipeline import ModelPipelineStep
 from logger import console, logger
@@ -170,6 +170,7 @@ class TabularTrainTestSplitterModule(ModelPipelineStep):
         self,
         train_test_split: float = config.TRAIN_TEST_SPLIT,
         random_state: int = config.SEED,
+        group_column: str | None = None,
     ) -> None:
         """
         Initialize the train-test splitter class
@@ -179,12 +180,19 @@ class TabularTrainTestSplitterModule(ModelPipelineStep):
                 include in the test split. Defaults to config.TRAIN_TEST_SPLIT.
             random_state (int, optional): The random seed. Defaults to
                 config.SEED.
+            group_column (str | None, optional): If given and present in the features,
+                split by group so that every row sharing a group value (e.g. a hive)
+                lands entirely in train or entirely in test. This prevents group
+                leakage when rows are not independent (near-duplicate recordings of the
+                same hive/session). Falls back to a stratified random row split when
+                None or the column is absent. Defaults to None.
         Returns:
             None
         """
 
         self._train_test_split = train_test_split
         self._random_state = random_state
+        self._group_column = group_column
 
         super().__init__()
 
@@ -207,29 +215,56 @@ class TabularTrainTestSplitterModule(ModelPipelineStep):
         if verbose:
             console.section("Splitting dataframe into train and test")
 
-        # Stratify on the target so the held-out test set keeps the original
-        # class proportions. Without this, "always predict majority" can
-        # happen to score well on test and mask a degenerate model.
-        x_train, x_test, y_train, y_test = train_test_split(
-            features,
-            target,
-            test_size=self._train_test_split,
-            random_state=self._random_state,
-            stratify=target,
+        use_groups = (
+            self._group_column is not None and self._group_column in features.columns
         )
+
+        if use_groups:
+            # Group-aware split: hold out whole groups (e.g. hives) so no group
+            # appears in both train and test. Critical when rows are autocorrelated
+            # within a group and a random split would leak near-duplicate neighbours
+            # across the boundary, inflating the test score.
+            groups = features[self._group_column]
+            splitter = GroupShuffleSplit(
+                n_splits=1,
+                test_size=self._train_test_split,
+                random_state=self._random_state,
+            )
+            train_idx, test_idx = next(splitter.split(features, target, groups=groups))
+            x_train, x_test = features.iloc[train_idx], features.iloc[test_idx]
+            y_train, y_test = target.iloc[train_idx], target.iloc[test_idx]
+            if verbose:
+                logger.info(
+                    f"Group-aware split on '{self._group_column}'. "
+                    f"Train groups: {sorted(groups.iloc[train_idx].unique())} | "
+                    f"Test groups: {sorted(groups.iloc[test_idx].unique())}"
+                )
+        else:
+            # Stratify on the target so the held-out test set keeps the original
+            # class proportions. Without this, "always predict majority" can
+            # happen to score well on test and mask a degenerate model.
+            x_train, x_test, y_train, y_test = train_test_split(
+                features,
+                target,
+                test_size=self._train_test_split,
+                random_state=self._random_state,
+                stratify=target,
+            )
 
         x_train = cast(pd.DataFrame, x_train)
         x_test = cast(pd.DataFrame, x_test)
         y_train = cast(pd.DataFrame, y_train)
         y_test = cast(pd.DataFrame, y_test)
-        
+
         if verbose:
             logger.info(
                 "Finished splitting dataframe into train and test.\n"
                 f"X_train shape: {x_train.shape},\n"
                 f"X_test shape: {x_test.shape},\n"
                 f"Y_train shape: {y_train.shape},\n"
-                f"Y_test shape: {y_test.shape}"
+                f"Y_test shape: {y_test.shape}\n"
+                f"Train class balance:\n{y_train.value_counts()}\n"
+                f"Test class balance:\n{y_test.value_counts()}"
             )
 
         return {

@@ -20,6 +20,8 @@ class FineTuningConfiguration:
 
     transformer: type[TransformBase] = PassThroughTransformModule
     resampler: type | None = None
+    resampler_parameters: dict[str, Any] = field(default_factory=dict)
+    group_column: str | None = None
     model_hyperparameters: dict[str, list[Any]] = field(default_factory=dict)
     transformer_hyperparameters: dict[str, list[Any]] = field(default_factory=dict)
 

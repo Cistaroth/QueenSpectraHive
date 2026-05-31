@@ -141,6 +141,23 @@ class TabularTrainTestOneHotEncoderModule(ModelPipelineStep):
             console.section(title="One-hot encoding (train-fit only)")
             logger.info(f"Columns to encode: {self._columns_to_encode}")
 
+        x_train = x_train.copy()
+        x_test = x_test.copy()
+
+        # Pin a stable category set per column from the union of values OBSERVED in
+        # train and test (the category universe, not the labels). This keeps the
+        # one-hot width constant even when a group-aware split places an entire
+        # category (e.g. a whole hive) on only one side of the split. The absent
+        # category's column is all-zero on the side it is missing from, so no label
+        # information crosses the split — only the column schema is shared.
+        for col in self._columns_to_encode:
+            if col not in x_train.columns:
+                continue
+            categories = sorted(set(x_train[col].dropna()) | set(x_test[col].dropna()))
+            cat_dtype = pd.CategoricalDtype(categories=categories)
+            x_train[col] = x_train[col].astype(cat_dtype)
+            x_test[col] = x_test[col].astype(cat_dtype)
+
         x_train_enc = pd.get_dummies(
             data=x_train,
             columns=self._columns_to_encode,

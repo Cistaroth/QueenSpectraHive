@@ -62,6 +62,7 @@ def main() -> None:
             TabularTrainTestSplitterModule(
                 train_test_split=settings.TRAIN_TEST_SPLIT,
                 random_state=settings.SEED,
+                group_column=settings.GROUP_COLUMN,
             ),
 
             # One-hot encoding and imputation happen after the split so that
@@ -75,10 +76,17 @@ def main() -> None:
                 impute_columns=settings.IMPUTE_COLUMNS,
             ),
 
+            # oversample=False: the audio splicer only assigns real audio paths and
+            # random slice windows here. Class balancing is delegated to TabularSMOTE
+            # inside the CV loop, which interpolates the tabular features and pairs each
+            # synthetic row with a real same-class clip. Oversampling here instead would
+            # (a) make SMOTE a no-op on already-balanced folds and (b) leak duplicated
+            # minority rows across the CV train/val split.
             AudioSplicerModule(
                 audio_path_col=settings.AUDIO_PATH_COL,
                 audio_dir=settings.AUDIO_DIR,
                 chunk_duration=settings.CHUNK_DURATION,
+                oversample=False,
             ).set_dependency("y_train", -3),
 
             HyperparameterTuningStratifiedKFoldModule(

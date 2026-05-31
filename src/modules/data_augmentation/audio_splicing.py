@@ -7,6 +7,50 @@ import pandas as pd
 from pipeline import ModelPipelineStep
 from logger import console, logger
 
+
+def random_audio_slice(
+    file_path: str,
+    audio_dir: Path | None,
+    chunk_duration: int = 15,
+    rng=None,
+) -> tuple[int, int]:
+    """
+    Draw a random ``chunk_duration``-second window over a recording's segments.
+
+    Assumes each ``__segment*.wav`` on disk is ~60 seconds, so the total duration is
+    ``60 * number_of_segments``. Shared by the audio splicer (for real rows) and by
+    TabularSMOTE (to give each synthetic row a freshly sampled frame of its borrowed
+    clip rather than reusing an existing window).
+
+    Args:
+        file_path (str): Path (or name) of the recording; only its stem is used to
+            locate the matching segment files.
+        audio_dir (Path | None): Directory holding the ``<stem>__segment*.wav`` files.
+        chunk_duration (int, optional): Window length in seconds. Defaults to 15.
+        rng (optional): A source exposing ``uniform(a, b)`` (e.g. ``random`` or a numpy
+            ``Generator``) so callers can make sampling reproducible. Defaults to the
+            global ``random`` module.
+    Returns:
+        tuple[int, int]: Start and end second offsets of the chosen window.
+    """
+    sampler = rng if rng is not None else random
+    try:
+        stem = Path(file_path).stem
+        segments = list(audio_dir.glob(f"{stem}__segment*.wav")) if audio_dir else []
+        nr_segments = len(segments) if segments else 1
+        total_duration = 60 * nr_segments
+
+        if total_duration < chunk_duration:
+            return 0, total_duration
+
+        max_start = total_duration - chunk_duration
+        start_point = round(sampler.uniform(0, max_start))
+        return start_point, start_point + chunk_duration
+    except Exception as e:
+        logger.error(f"Error at getting splice for file at {file_path}: {e}")
+        return 0, chunk_duration
+
+
 class AudioSplicerModule(ModelPipelineStep):
     name = "Audio Splicer"
 
@@ -50,22 +94,7 @@ class AudioSplicerModule(ModelPipelineStep):
         Returns:
             tuple[int, int]: Start and end integer coordinates in seconds.
         """
-        try:
-            stem = Path(file_path).stem
-            segments = list(self._audio_dir.glob(f"{stem}__segment*.wav")) if self._audio_dir else []
-            nr_segments = len(segments) if segments else 1
-            total_duration = 60 * nr_segments
-
-            if total_duration < self._chunk_duration:
-                return 0, total_duration
-
-
-            max_start = total_duration - self._chunk_duration
-            start_point = round(random.uniform(0, max_start))
-            return start_point, start_point + self._chunk_duration
-        except Exception as e:
-            logger.error(f"Error at getting splice for file at {file_path}: {e}")
-            return 0, self._chunk_duration
+        return random_audio_slice(file_path, self._audio_dir, self._chunk_duration)
 
     def _slice_over_df(self, df: pd.DataFrame,  existing_stems: set, real_paths: dict | None = None) -> pd.DataFrame:
         """
