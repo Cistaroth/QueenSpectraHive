@@ -8,17 +8,16 @@ from modules.utils.header import HeaderModule
 from modules.data_loading.kaggle_loader import KaggleDataLoaderModule
 from modules.data_loading.tabular_data_loader import TabularDataLoaderModule
 from modules.tabular.tabular_feature_extractor import TabularTimeColumnEncoderModule
-from modules.tabular.tabular_imputation import TabularColumnMeanImputerModule
+from modules.tabular.tabular_imputation import TabularTrainTestMeanImputerModule
 from modules.tabular.tabular_utils import (
     TabularColumnDropperModule,
-    TabularOneHotEncoderModule,
+    TabularTrainTestOneHotEncoderModule,
 )
 from modules.tabular.tabular_splitters import (
     TabularFeatureTargetSplitterModule,
     TabularTrainTestSplitterModule,
 )
 from modules.data_augmentation.audio_splicing import AudioSplicerModule
-from modules.data_augmentation.tabular_interpolation import TabularSMOTE
 from modules.hyperparameter_tuning.hyperparameter_tuning import (
     HyperparameterTuningStratifiedKFoldModule,
 )
@@ -56,14 +55,6 @@ def main() -> None:
                 drop_columns=settings.TIME_FEATURES,
             ),
 
-            TabularOneHotEncoderModule(
-                columns_to_encode=settings.ONEHOT_COLUMNS,
-            ),
-
-            TabularColumnMeanImputerModule(
-                impute_columns=settings.IMPUTE_COLUMNS,
-            ),
-
             TabularFeatureTargetSplitterModule(
                 target_column=settings.TARGET_COLUMN,
             ),
@@ -73,7 +64,16 @@ def main() -> None:
                 random_state=settings.SEED,
             ),
 
-            TabularSMOTE(),
+            # One-hot encoding and imputation happen after the split so that
+            # category vocabularies and column means are derived from training
+            # data only, preventing test statistics from leaking into training.
+            TabularTrainTestOneHotEncoderModule(
+                columns_to_encode=settings.ONEHOT_COLUMNS,
+            ),
+
+            TabularTrainTestMeanImputerModule(
+                impute_columns=settings.IMPUTE_COLUMNS,
+            ),
 
             AudioSplicerModule(
                 audio_path_col=settings.AUDIO_PATH_COL,

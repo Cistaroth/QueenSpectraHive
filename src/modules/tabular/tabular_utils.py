@@ -114,3 +114,52 @@ class TabularOneHotEncoderModule(ModelPipelineStep):
             )
 
         return result
+
+
+class TabularTrainTestOneHotEncoderModule(ModelPipelineStep):
+    name = "TabularTrainTestOneHotEncoder"
+    inputs = {"x_train", "x_test"}
+    outputs = {"x_train", "x_test"}
+
+    def __init__(
+        self,
+        columns_to_encode: list[str],
+        drop_first: bool = True,
+    ) -> None:
+        self._columns_to_encode = columns_to_encode
+        self._drop_first = drop_first
+        self._train_columns: list[str] | None = None
+        super().__init__()
+
+    def run(
+        self,
+        x_train: pd.DataFrame,
+        x_test: pd.DataFrame,
+        verbose: bool = True,
+    ) -> dict[str, pd.DataFrame]:
+        if verbose:
+            console.section(title="One-hot encoding (train-fit only)")
+            logger.info(f"Columns to encode: {self._columns_to_encode}")
+
+        x_train_enc = pd.get_dummies(
+            data=x_train,
+            columns=self._columns_to_encode,
+            drop_first=self._drop_first,
+            dtype=int,
+        )
+        self._train_columns = x_train_enc.columns.tolist()
+
+        x_test_enc = pd.get_dummies(
+            data=x_test,
+            columns=self._columns_to_encode,
+            drop_first=self._drop_first,
+            dtype=int,
+        ).reindex(columns=self._train_columns, fill_value=0)
+
+        if verbose:
+            logger.info(
+                "Finished one-hot encoding. "
+                f"Dataframe shape: {x_train_enc.shape}"
+            )
+
+        return {"x_train": x_train_enc, "x_test": x_test_enc}

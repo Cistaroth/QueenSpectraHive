@@ -19,6 +19,7 @@ class FineTuningConfiguration:
     folds: int = 5
 
     transformer: type[TransformBase] = PassThroughTransformModule
+    resampler: type | None = None
     model_hyperparameters: dict[str, list[Any]] = field(default_factory=dict)
     transformer_hyperparameters: dict[str, list[Any]] = field(default_factory=dict)
 

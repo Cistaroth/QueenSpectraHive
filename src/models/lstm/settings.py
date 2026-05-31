@@ -8,6 +8,7 @@ from modules.hyperparameter_tuning.configuration import FineTuningConfiguration
 from modules.lstm.lstm_train import FusionLSTMTrainModule
 from modules.lstm.lstm_inference import FusionLSTMInferenceModule
 from modules.tabular.tabular_scalers import TabularStandardScalerModule
+from modules.data_augmentation.tabular_interpolation import TabularSMOTE
 
 
 class FusionLSTMSettings(BaseModel):
@@ -60,6 +61,7 @@ class FusionLSTMSettings(BaseModel):
         model_train=FusionLSTMTrainModule,
         model_inference=FusionLSTMInferenceModule,
         transformer=TabularStandardScalerModule,
+        resampler=TabularSMOTE,
         transformer_hyperparameters={
             "columns_to_exclude": [["file name", "start_sec", "end_sec"]],
         },

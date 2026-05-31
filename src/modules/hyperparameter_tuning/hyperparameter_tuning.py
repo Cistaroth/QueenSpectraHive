@@ -293,6 +293,15 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
                         x_train_transformed = transformer.fit_transform(x_train_fold)
                         x_val_transformed = transformer.transform(x_val_fold)
 
+                        # Apply resampler (e.g. SMOTE) to the training fold only,
+                        # after scaling, to prevent val-fold statistics leaking into
+                        # synthetic training samples.
+                        if cfg.resampler is not None:
+                            resampler = cfg.resampler()
+                            resampled = resampler.run(x_train_transformed, y_train_fold, verbose=False)
+                            x_train_transformed = resampled["x_train"]
+                            y_train_fold = resampled["y_train"]
+
                         # Train the model on the training fold and evaluate on the validation fold.
                         # Do NOT persist per-fold checkpoints to disk - only the final refit
                         # below should produce a saved model (passed save_model=False when supported).
