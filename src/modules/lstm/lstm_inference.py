@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from logger import console, logger
 from modules.lstm.lstm_model import FusionLSTMModel
 from modules.model_bases import InferencerBase
-from torch_datasets.lstm_dataset import LSTMBeeAudioDataset
+from torch_datasets.lstm_dataset import LSTMBeeAudioDataset, pad_collate_fn
 
 
 class FusionLSTMInferenceModule(InferencerBase):
@@ -72,6 +72,7 @@ class FusionLSTMInferenceModule(InferencerBase):
             shuffle=False,
             num_workers=self._num_workers,
             pin_memory=(self._device.type == "cuda"),
+            collate_fn=pad_collate_fn,
         )
 
     def run(

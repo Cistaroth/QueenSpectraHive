@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from modules.model_bases import TrainerBase
 from logger import console, logger
-from torch_datasets.lstm_dataset import LSTMBeeAudioDataset
+from torch_datasets.lstm_dataset import LSTMBeeAudioDataset, pad_collate_fn
 from modules.lstm.lstm_model import FusionLSTMModel
 
 
@@ -122,6 +122,7 @@ class FusionLSTMTrainModule(TrainerBase):
             shuffle=True,
             num_workers=self._num_workers,
             pin_memory=(self._device.type == "cuda"),
+            collate_fn=pad_collate_fn,
         )
 
     def _save_model(self, model: FusionLSTMModel) -> None:
