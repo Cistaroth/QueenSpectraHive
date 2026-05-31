@@ -106,8 +106,17 @@ class FusionLSTMInferenceModule(InferencerBase):
         self.last_kept_index = loader.dataset.kept_index
 
         all_preds, all_proba = [], []
+        first_batch = True
         with torch.no_grad():
             for batch_mel, batch_tabular, _, batch_lengths in loader:
+                if first_batch and verbose:
+                    m = batch_mel
+                    logger.info(
+                        f"MFCC summary  shape={tuple(m.shape)}  "
+                        f"mean={m.mean():.4f}  std={m.std():.4f}  "
+                        f"min={m.min():.4f}  max={m.max():.4f}"
+                    )
+                    first_batch = False
                 batch_mel = batch_mel.to(self._device)
                 batch_tabular = batch_tabular.to(self._device)
 

@@ -341,7 +341,13 @@ uploadBtn.addEventListener('click', async () => {
   showLoading();
 
   const formData = new FormData();
-  formData.append('file', currentFile);
+  const wavFile = new File([currentFile], currentFile.name, { type: 'audio/wav' });
+  formData.append('file', wavFile);
+
+  const tabular = getTabularData();
+  for (const [key, val] of Object.entries(tabular)) {
+    formData.append(key, val);
+  }
 
   const tabular = getTabularData();
   for (const [key, val] of Object.entries(tabular)) {
@@ -362,7 +368,7 @@ uploadBtn.addEventListener('click', async () => {
     }
 
     const data = await res.json();
-    showResult(data.boolean === true, data.probability, null);
+    showResult(data['queen-detected'] === true, data.probability, null);
 
   } catch (err) {
     showResult(false, null, 'Could not reach the inference service. Please check your connection and try again.');

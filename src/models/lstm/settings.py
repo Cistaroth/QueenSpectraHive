@@ -78,7 +78,7 @@ class FusionLSTMSettings(BaseModel):
         },
         model_hyperparameters={
             "drop_column":                [["file name", "start_sec", "end_sec"]],
-            "embeddings_model":                     [(nn.Linear(21, 64), nn.ReLU(), nn.Linear(64, 32))],
+            "embeddings_model":                     [(nn.Linear(16, 64), nn.ReLU(), nn.Linear(64, 32))],
             # Shrunk from hidden=128 and raised dropout to fight the overfitting seen
             # on this small, few-hive dataset (seq_input_size, hidden, layers, dropout).
             "lstm_layers":                [(40, 64, 2, 0.4)],

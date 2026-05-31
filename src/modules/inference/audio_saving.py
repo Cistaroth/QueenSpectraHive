@@ -18,8 +18,7 @@ class AudioSavingModule(ModelPipelineStep):
 
     FEATURE_COLUMNS = [
         "hive temp", "hive humidity", "hive pressure",
-        "weather temp", "weather humidity", "weather pressure",
-        "wind speed", "cloud coverage", "frames",
+        "frames",
         "hour_sin", "hour_cos",
         "minute_sin", "minute_cos",
         "day_sin", "day_cos",
@@ -29,21 +28,16 @@ class AudioSavingModule(ModelPipelineStep):
     ]
 
     _NUMERIC_MAP = [
-        ("hive_temp",        "hive temp"),
-        ("hive_humidity",    "hive humidity"),
-        ("hive_pressure",    "hive pressure"),
-        ("weather_temp",     "weather temp"),
-        ("weather_humidity", "weather humidity"),
-        ("weather_pressure", "weather pressure"),
-        ("wind_speed",       "wind speed"),
-        ("cloud_coverage",   "cloud coverage"),
-        ("frames",           "frames"),
+        ("hive_temp",     "hive temp"),
+        ("hive_humidity", "hive humidity"),
+        ("hive_pressure", "hive pressure"),
+        ("frames",        "frames"),
     ]
 
     def __init__(
         self,
         save_path: Path = Path(__file__).parents[2] / "data" / "sound_files" / "sound_files",
-        chunk_duration: float = 15.0,
+        chunk_duration: float = 360.0,
     ) -> None:
         super().__init__()
         self._save_path = save_path
@@ -62,6 +56,7 @@ class AudioSavingModule(ModelPipelineStep):
         save_path = self._save_path / "inference_input__segment.wav"
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
+        file.file.seek(0)
         with save_path.open("wb") as f:
             shutil.copyfileobj(file.file, f)
 
