@@ -17,28 +17,32 @@ class MFCCExtractorModule(ModelPipelineStep):
     inputs = {"waveform", "sample_rate"}
     outputs = {"mfcc"}
 
-    def __init__(self, n_mfcc: int = 40) -> None:
+    def __init__(self, n_mfcc: int = 40, sample_rate: int = 16000) -> None:
         """
         Initializes the MFCCExtractor class.
 
         Args:
-            n_mfcc (int, optional): Number of Mel-Frequency Cepstral Coefficients to retain. Defaults to 40.
+            n_mfcc (int, optional): Number of MFCCs to retain. Defaults to 40.
+            sample_rate (int, optional): Sample rate of the audio. Defaults to 16000.
         """
         super().__init__()
         self._n_mfcc = n_mfcc
+        self._mfcc_transform = T.MFCC(
+            sample_rate=sample_rate,
+            n_mfcc=n_mfcc,
+            melkwargs={"n_fft": 400, "hop_length": 160, "n_mels": 64}
+        )
 
     def run(
         self,
         waveform: torch.Tensor,
-        sample_rate: int,
         verbose: bool = True
     ) -> dict[str, Any]:
         """
-        Crops an input waveform using temporal second markers and extracts MFCC vectors.
+        Extracts MFCC vectors from a raw waveform.
 
         Args:
-            waveform (torch.Tensor): Raw audio input stream tensor of shape [Channels, Time_Samples].
-            sample_rate (int): The current sampling frequency of the provided waveform.
+            waveform (torch.Tensor): Raw audio tensor of shape [Channels, Time_Samples].
             verbose (bool, optional): Verbose logging execution mode. Defaults to True.
         Returns:
             dict[str, Any]: Dictionary containing the output 'mfcc' tensor.
@@ -47,13 +51,7 @@ class MFCCExtractorModule(ModelPipelineStep):
             console.section("Extracting MFCC Audio Vectors")
 
         try:
-            mfcc_transform = T.MFCC(
-                sample_rate=sample_rate,
-                n_mfcc=self._n_mfcc,
-                melkwargs={"n_fft": 400, "hop_length": 160, "n_mels": 64}
-            )
-
-            mfcc_data = mfcc_transform(waveform)
+            mfcc_data = self._mfcc_transform(waveform)
 
             if verbose:
                 logger.info("Successfully processed segment.")

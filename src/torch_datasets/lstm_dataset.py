@@ -20,12 +20,13 @@ class LSTMBeeAudioDataset(BeeAudioDataset):
 
         self._n_mfcc = n_mfcc
 
-        self._feature_extractor = MFCCExtractorModule(n_mfcc=self._n_mfcc)
+        self._feature_extractor = MFCCExtractorModule(n_mfcc=self._n_mfcc, sample_rate=self.TARGET_SR)
 
-        self._tabular_features = features.drop(columns_to_drop, axis=1)
+        present = [c for c in columns_to_drop if c in features.columns]
+        self._tabular_features = features.drop(present, axis=1)
 
     def _get_features(self, idx: int, waveform: torch.Tensor) -> Sequence:
-        sequential_features = self._feature_extractor.run(waveform, sample_rate=self.TARGET_SR, verbose=False)
+        sequential_features = self._feature_extractor.run(waveform, verbose=False)
         sequential_features = sequential_features["mfcc"].squeeze(0)
         sequential_features = sequential_features.transpose(-1, -2).contiguous()
 
