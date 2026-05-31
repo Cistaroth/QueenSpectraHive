@@ -18,8 +18,8 @@ class FusionLSTMInferenceModule(InferencerBase):
 
     def __init__(
         self,
-        drop_column: list[str],
-        n_mfcc: int,
+        drop_column: list[str] = ["file name"],
+        n_mfcc: int = 40,
         audio_dir: str = "data/sound_files/sound_files",
         audio_path_col: str = "file name",
         batch_size: int = 32,
