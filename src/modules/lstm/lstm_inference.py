@@ -116,6 +116,10 @@ class FusionLSTMInferenceModule(InferencerBase):
                 all_preds.append(preds.cpu().numpy())
                 all_proba.append(probs.cpu().numpy())
 
+        if not all_preds:
+            logger.warning("Inference produced no predictions — dataset was empty after audio filtering.")
+            return {"y_pred": np.array([]), "y_pred_proba": np.array([])}
+
         y_pred = np.concatenate(all_preds)
         y_pred_proba = np.concatenate(all_proba)
 

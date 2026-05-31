@@ -35,6 +35,7 @@ class BeeAudioDataset(LazyAudioDataset):
         """
         self._audio_dir = Path(audio_dir)
         features, labels = self._drop_missing_audio(features, labels)
+        self._features = features  # filtered, reset-index — subclasses must use this
 
         if labels is None:
             self._labels = None
@@ -52,10 +53,14 @@ class BeeAudioDataset(LazyAudioDataset):
         features: pd.DataFrame,
         labels,
     ) -> tuple[pd.DataFrame, any]:
-        mask = features["file name"].apply(
-            lambda p: bool(list(self._audio_dir.glob(f"{Path(p).stem}__segment*.wav")))
-            if isinstance(p, str) else False
-        )
+        def _has_audio(p) -> bool:
+            if not isinstance(p, str):
+                return False
+            path = Path(p)
+            search_dir = path.parent if path.is_absolute() else self._audio_dir
+            return bool(list(search_dir.glob(f"{path.stem}__segment*.wav")))
+
+        mask = features["file name"].apply(_has_audio)
         missing = (~mask).sum()
         logger.info(f"Audio check: {len(features)} rows total, {missing} missing, {mask.sum()} kept.")
         if missing:
