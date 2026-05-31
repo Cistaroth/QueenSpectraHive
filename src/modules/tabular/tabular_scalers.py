@@ -86,18 +86,23 @@ class TabularStandardScalerModule(TransformBase):
     inputs = {"x_train", "x_test"}
     outputs = {"x_train_scaled", "x_test_scaled"}
 
-    def __init__(self) -> None:
+    def __init__(self, columns_to_exclude: list[str] | None = None) -> None:
         """
         Initialize the standard scaler class
 
         Args:
-            None
+            columns_to_exclude (list[str] | None): Columns to pass through without scaling
+                (e.g. audio path or id columns). Defaults to None (scale all columns).
         Returns:
             None
         """
         super().__init__()
 
+        self._columns_to_exclude = set(columns_to_exclude) if columns_to_exclude else set()
         self.scaler = StandardScaler()
+
+    def _scale_cols(self, x: pd.DataFrame) -> list[str]:
+        return [c for c in x.columns if c not in self._columns_to_exclude]
 
     def run(
         self, x_train: pd.DataFrame, x_test: pd.DataFrame, verbose: bool = True
@@ -115,17 +120,8 @@ class TabularStandardScalerModule(TransformBase):
         if verbose:
             console.section(title="Standard Scaling data")
 
-        x_train_scaled = pd.DataFrame(
-            data=self.fit_transform(x_train),
-            columns=x_train.columns,
-            index=x_train.index,
-        )
-
-        x_test_scaled = pd.DataFrame(
-            data=self.scaler.transform(x_test),
-            columns=x_test.columns,
-            index=x_test.index,
-        )
+        x_train_scaled = self.fit_transform(x_train)
+        x_test_scaled = self.transform(x_test)
 
         result = {"x_train_scaled": x_train_scaled, "x_test_scaled": x_test_scaled}
 
@@ -143,7 +139,12 @@ class TabularStandardScalerModule(TransformBase):
         Returns:
             pd.DataFrame: The scaled data
         """
-        return pd.DataFrame(self.scaler.fit_transform(x), columns=x.columns, index=x.index)
+        cols = self._scale_cols(x)
+        scaled = pd.DataFrame(self.scaler.fit_transform(x[cols]), columns=cols, index=x.index)
+        if self._columns_to_exclude:
+            passthrough = x[[c for c in x.columns if c in self._columns_to_exclude]]
+            return pd.concat([scaled, passthrough], axis=1)[x.columns]
+        return scaled
 
     def transform(self, x: pd.DataFrame) -> pd.DataFrame:
         """
@@ -154,4 +155,9 @@ class TabularStandardScalerModule(TransformBase):
         Returns:
             pd.DataFrame: The scaled data
         """
-        return pd.DataFrame(self.scaler.transform(x), columns=x.columns, index=x.index)
+        cols = self._scale_cols(x)
+        scaled = pd.DataFrame(self.scaler.transform(x[cols]), columns=cols, index=x.index)
+        if self._columns_to_exclude:
+            passthrough = x[[c for c in x.columns if c in self._columns_to_exclude]]
+            return pd.concat([scaled, passthrough], axis=1)[x.columns]
+        return scaled

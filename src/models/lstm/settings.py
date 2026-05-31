@@ -7,6 +7,7 @@ from config import config
 from modules.hyperparameter_tuning.configuration import FineTuningConfiguration
 from modules.lstm.lstm_train import FusionLSTMTrainModule
 from modules.lstm.lstm_inference import FusionLSTMInferenceModule
+from modules.tabular.tabular_scalers import TabularStandardScalerModule
 
 
 class FusionLSTMSettings(BaseModel):
@@ -58,6 +59,10 @@ class FusionLSTMSettings(BaseModel):
         model_name="Fusion LSTM (audio + tabular)",
         model_train=FusionLSTMTrainModule,
         model_inference=FusionLSTMInferenceModule,
+        transformer=TabularStandardScalerModule,
+        transformer_hyperparameters={
+            "columns_to_exclude": [["file name", "start_sec", "end_sec"]],
+        },
         model_hyperparameters={
             "drop_column":                [["file name", "start_sec", "end_sec"]],
             "embeddings_model":                     [(nn.Linear(21, 64), nn.ReLU(), nn.Linear(64, 32))],

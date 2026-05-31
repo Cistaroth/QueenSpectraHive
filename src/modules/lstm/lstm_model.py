@@ -16,11 +16,14 @@ class FusionLSTMModel(
 
         seq_input_size, lstm_hidden_size, lstm_num_layers, lstm_dropout = lstm_layers
 
+        # Normalize MFCC features per timestep before the LSTM
+        self.input_norm = nn.LayerNorm(seq_input_size)
+
         # LSTM Component
         self.lstm = nn.LSTM(
             input_size=seq_input_size,
             hidden_size=lstm_hidden_size,
-            num_layers=lstm_num_layers, 
+            num_layers=lstm_num_layers,
             dropout=lstm_dropout,
             batch_first=True
         )
@@ -38,7 +41,7 @@ class FusionLSTMModel(
         )
 
     def forward(self, historical_data: torch.Tensor, current_data: torch.Tensor):
-        lstm_output, _ = self.lstm(historical_data)
+        lstm_output, _ = self.lstm(self.input_norm(historical_data))
 
         tabular_embedding_output = self.embeddings_model(current_data)
 
