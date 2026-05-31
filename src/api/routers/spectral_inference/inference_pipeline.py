@@ -1,26 +1,29 @@
 from pathlib import Path
 
 import torch
+import torch.nn as nn
+
 from pipeline import ModelPipeline
 from modules.inference.audio_saving import AudioSavingModule
-from modules.transformer.transformer_inference import TransformerInferenceModule
-from modules.transformer.transformer_model import AudioTransformer
+from modules.inference.tabular_feature_builder import TabularFeatureBuilderModule
+from modules.lstm.lstm_inference import FusionLSTMInferenceModule
+from modules.lstm.lstm_model import FusionLSTMModel
 
-# MODEL_PATH = Path(__file__).parents[4] / "trained_models" / "transformer" / "transformer_8.pth"
-# MODEL = AudioTransformer(
-#     num_classes = 1
-# )
-# MODEL.load_state_dict(torch.load(MODEL_PATH, map_location=torch.device("cpu")))
+MODEL_PATH = Path(__file__).parents[4] / "trained_models" / "lstm" / "lstm_model.pth"
 
-INFERENCE_PIPELINE = ModelPipeline()
-# INFERENCE_PIPELINE = ModelPipeline(
-#     steps = [
-#         AudioSavingModule(),
-#         TransformerInferenceModule(),
-#     ]
-# ).add_context(
-#     step = 1,
-#     context = {
-#         "model": MODEL
-#     }
-# )
+_model = FusionLSTMModel(
+    lstm_layers=(40, 128, 2, 0.3),
+    features_input_size=32,
+    embeddings_model=(nn.Linear(21, 64), nn.ReLU(), nn.Linear(64, 32)),
+    ff_hidden_size=64,
+)
+_model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
+_model.eval()
+
+INFERENCE_PIPELINE = ModelPipeline(
+    steps=[
+        AudioSavingModule(),
+        TabularFeatureBuilderModule(),
+        FusionLSTMInferenceModule(drop_column=["file name", "start_sec", "end_sec"]),
+    ]
+).add_context(step=2, context={"model": _model})

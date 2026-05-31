@@ -205,7 +205,7 @@ class FusionLSTMTrainModule(TrainerBase):
             epoch_acc = correct / total
 
             if val_loader is not None:
-                val_loss, val_acc = self._evaluate(model, val_loader, criterion)
+                val_loss, val_acc, pred_zeros, pred_ones, actual_zeros, actual_ones = self._evaluate(model, val_loader, criterion)
 
                 # Track the best-val-loss weights so we can restore them later.
                 if val_loss < best_val_loss:
@@ -217,7 +217,8 @@ class FusionLSTMTrainModule(TrainerBase):
                     logger.info(
                         f"Epoch completed [{epoch:>3}/{self._epochs}]  "
                         f"loss={epoch_loss:.4f}  acc={epoch_acc:.4f}    "
-                        f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}"
+                        f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}  |  "
+                        f"pred 0={pred_zeros} 1={pred_ones}  actual 0={actual_zeros} 1={actual_ones}"
                     )
             elif verbose:
                 logger.info(
@@ -251,6 +252,10 @@ class FusionLSTMTrainModule(TrainerBase):
         running_loss = 0.0
         correct = 0
         total = 0
+        pred_zeros = 0
+        pred_ones = 0
+        actual_zeros = 0
+        actual_ones = 0
 
         for batch_features, batch_tabular_features, batch_labels in loader:
             batch_features = batch_features.to(self._device)
@@ -265,7 +270,12 @@ class FusionLSTMTrainModule(TrainerBase):
             correct += (preds == batch_labels).sum().item()
             total += len(batch_labels)
 
-        return running_loss / total, correct / total
+            pred_zeros += (preds == 0).sum().item()
+            pred_ones += (preds == 1).sum().item()
+            actual_zeros += (batch_labels == 0).sum().item()
+            actual_ones += (batch_labels == 1).sum().item()
+
+        return running_loss / total, correct / total, pred_zeros, pred_ones, actual_zeros, actual_ones
 
     def run(
         self,
