@@ -5,7 +5,6 @@ import torch.nn as nn
 
 from pipeline import ModelPipeline
 from modules.inference.audio_saving import AudioSavingModule
-from modules.inference.tabular_feature_builder import TabularFeatureBuilderModule
 from modules.lstm.lstm_inference import FusionLSTMInferenceModule
 from modules.lstm.lstm_model import FusionLSTMModel
 
@@ -23,7 +22,6 @@ _model.eval()
 INFERENCE_PIPELINE = ModelPipeline(
     steps=[
         AudioSavingModule(),
-        TabularFeatureBuilderModule(),
         FusionLSTMInferenceModule(drop_column=["file name", "start_sec", "end_sec"]),
     ]
-).add_context(step=2, context={"model": _model})
+).add_context(step=1, context={"model": _model})

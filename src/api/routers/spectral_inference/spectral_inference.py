@@ -30,8 +30,7 @@ async def spectral_inference(request: Request) -> dict[str, str | bool | float]:
     tabular_data = {k: str(v) for k, v in form.items() if k != "file"}
 
     try:
-        INFERENCE_PIPELINE.add_context(step=0, context={"file": file})
-        INFERENCE_PIPELINE.add_context(step=1, context={"tabular_data": tabular_data})
+        INFERENCE_PIPELINE.add_context(step=0, context={"file": file, "tabular_data": tabular_data})
         pipeline_result = INFERENCE_PIPELINE.run()[-1].output
 
         print(pipeline_result)

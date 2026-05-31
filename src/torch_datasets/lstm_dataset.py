@@ -2,10 +2,19 @@ from pathlib import Path
 from typing import Sequence
 
 import torch
+import torch.nn.functional as F
 import pandas as pd
 
 from modules.feature_extraction.mfcc_extraction import MFCCExtractorModule
 from torch_datasets.datasets_base import BeeAudioDataset
+
+
+def lstm_collate_fn(batch):
+    mels, tabulars, labels = zip(*batch)
+    max_len = max(m.shape[0] for m in mels)
+    padded_mels = torch.stack([F.pad(m, (0, 0, 0, max_len - m.shape[0])) for m in mels])
+    return padded_mels, torch.stack(tabulars), torch.stack(labels)
+
 
 class LSTMBeeAudioDataset(BeeAudioDataset):
     def __init__(

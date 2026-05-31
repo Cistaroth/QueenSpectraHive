@@ -1,4 +1,6 @@
+import math
 import shutil
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -8,55 +10,55 @@ from fastapi import UploadFile
 from pipeline import ModelPipelineStep
 from logger import console, logger
 
+
 class AudioSavingModule(ModelPipelineStep):
     name = "AudioSavingModule"
-    inputs = {"file"}
+    inputs = {"file", "tabular_data"}
     outputs = {"result", "x_test"}
+
+    FEATURE_COLUMNS = [
+        "hive temp", "hive humidity", "hive pressure",
+        "weather temp", "weather humidity", "weather pressure",
+        "wind speed", "cloud coverage", "frames",
+        "hour_sin", "hour_cos",
+        "minute_sin", "minute_cos",
+        "day_sin", "day_cos",
+        "day_of_week_sin", "day_of_week_cos",
+        "device_2",
+        "hive number_3", "hive number_4", "hive number_5",
+    ]
+
+    _NUMERIC_MAP = [
+        ("hive_temp",        "hive temp"),
+        ("hive_humidity",    "hive humidity"),
+        ("hive_pressure",    "hive pressure"),
+        ("weather_temp",     "weather temp"),
+        ("weather_humidity", "weather humidity"),
+        ("weather_pressure", "weather pressure"),
+        ("wind_speed",       "wind speed"),
+        ("cloud_coverage",   "cloud coverage"),
+        ("frames",           "frames"),
+    ]
 
     def __init__(
         self,
         save_path: Path = Path(__file__).parents[2] / "data" / "sound_files" / "sound_files",
         chunk_duration: float = 15.0,
     ) -> None:
-        """
-        Initialize the AudioSavingModule.
-
-        Args:
-            save_path (Path): The path to save the audio file.
-            chunk_duration (float): Length in seconds of the window to feed the model.
-                Must match the chunk_duration used at training time (see
-                AudioSplicerModule). The dataframe returned to the inference pipeline
-                will carry a centered (start_sec, end_sec) window of this length so
-                LazyAudioDataset crops the same way training did, instead of letting
-                ASTFeatureExtractor silently truncate to its default ~10.24 s prefix.
-
-        Returns:
-            None
-        """
         super().__init__()
-
         self._save_path = save_path
         self._chunk_duration = float(chunk_duration)
 
     def run(
         self,
         file: UploadFile,
-        verbose: bool = True
+        tabular_data: dict,
+        verbose: bool = True,
     ) -> dict[str, pd.DataFrame]:
-        """
-        Save the audio file to a specified path.
-
-        Args:
-            file (UploadFile): The audio file to be saved.
-
-        Returns:
-            dict[str, pd.DataFrame]: A dictionary containing the saved file.
-        """
         if verbose:
             console.section(title="Saving audio file")
             console.print(f"Saving audio file to {self._save_path}")
 
-        # Save the audio file to a specified path
         save_path = self._save_path / "inference_input__segment.wav"
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -66,11 +68,6 @@ class AudioSavingModule(ModelPipelineStep):
         if verbose:
             console.print(f"Audio file saved to {save_path}")
 
-        # Inspect the saved file to compute a centered chunk_duration-second
-        # crop window. This matches how training data is cropped by
-        # AudioSplicerModule (random chunk_duration window), so the model sees
-        # the same kind of window at inference time instead of just the first
-        # ~10 s left over after ASTFeatureExtractor truncation.
         try:
             sound_info = sf.info(save_path)
             duration_sec = sound_info.frames / sound_info.samplerate
@@ -95,18 +92,61 @@ class AudioSavingModule(ModelPipelineStep):
                 f"(chunk_duration={self._chunk_duration:.2f}s)"
             )
 
-        # Return the saved file together with the centered crop window so the
-        # downstream LazyAudioDataset can slice exactly that range.
-        dataframe = pd.DataFrame(
-            {
-                "file name": ["inference_input.raw"],
-                "start_sec": [start_sec],
-                "end_sec": [end_sec],
-            }
+        audio_meta = pd.DataFrame({
+            "file name": ["inference_input.raw"],
+            "start_sec": [start_sec],
+            "end_sec":   [end_sec],
+        })
+
+        tabular_df = pd.DataFrame(
+            [self._build_tabular_row(tabular_data)],
+            columns=self.FEATURE_COLUMNS,
         )
 
-        return {
-            "result": True,
-            "x_test": dataframe
-        }
+        x_test = pd.concat([audio_meta, tabular_df], axis=1)
 
+        return {"result": True, "x_test": x_test}
+
+    def _build_tabular_row(self, tabular_data: dict) -> dict:
+        row: dict = {}
+
+        for form_key, col_name in self._NUMERIC_MAP:
+            val = tabular_data.get(form_key)
+            try:
+                row[col_name] = float(val) if val not in (None, "") else 0.0
+            except (ValueError, TypeError):
+                row[col_name] = 0.0
+
+        hour = minute = day = dow = 0
+        date_str = tabular_data.get("date")
+        if date_str:
+            try:
+                dt = datetime.fromisoformat(date_str)
+                hour, minute, day, dow = dt.hour, dt.minute, dt.day, dt.weekday()
+            except (ValueError, TypeError):
+                pass
+
+        row["hour_sin"]        = math.sin(2 * math.pi * hour   / 24)
+        row["hour_cos"]        = math.cos(2 * math.pi * hour   / 24)
+        row["minute_sin"]      = math.sin(2 * math.pi * minute / 60)
+        row["minute_cos"]      = math.cos(2 * math.pi * minute / 60)
+        row["day_sin"]         = math.sin(2 * math.pi * day    / 31)
+        row["day_cos"]         = math.cos(2 * math.pi * day    / 31)
+        row["day_of_week_sin"] = math.sin(2 * math.pi * dow    / 7)
+        row["day_of_week_cos"] = math.cos(2 * math.pi * dow    / 7)
+
+        try:
+            device = int(tabular_data.get("device") or 1)
+        except (ValueError, TypeError):
+            device = 1
+        row["device_2"] = 1.0 if device == 2 else 0.0
+
+        try:
+            hive_num = int(tabular_data.get("hive_number") or 1)
+        except (ValueError, TypeError):
+            hive_num = 1
+        row["hive number_3"] = 1.0 if hive_num == 3 else 0.0
+        row["hive number_4"] = 1.0 if hive_num == 4 else 0.0
+        row["hive number_5"] = 1.0 if hive_num == 5 else 0.0
+
+        return row
