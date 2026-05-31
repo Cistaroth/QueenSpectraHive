@@ -17,8 +17,79 @@ const progressWrap = document.getElementById('progressWrap');
 const timeDisplay  = document.getElementById('timeDisplay');
 const loadingScreen= document.getElementById('loadingScreen');
 const resultScreen = document.getElementById('resultScreen');
+const dataToggle   = document.getElementById('dataToggle');
+const tabularPanel = document.getElementById('tabularPanel');
+const tabularClose = document.getElementById('tabularClose');
+const resetTabular = document.getElementById('resetTabular');
 
 let currentFile = null;
+let tabularOpen  = false;
+
+// ── Tabular panel toggle ────────────────────────────────────────────────────
+function openTabularPanel() {
+  tabularPanel.style.display = 'flex';
+  void tabularPanel.getBoundingClientRect(); // force reflow so transition fires
+  tabularPanel.classList.add('visible');
+  tabularPanel.setAttribute('aria-hidden', 'false');
+  dataToggle.classList.add('active');
+  tabularOpen = true;
+  document.body.style.overflowY = 'auto';
+}
+
+function closeTabularPanel() {
+  tabularPanel.classList.remove('visible');
+  tabularPanel.setAttribute('aria-hidden', 'true');
+  dataToggle.classList.remove('active');
+  tabularOpen = false;
+  setTimeout(() => {
+    if (!tabularOpen) {
+      tabularPanel.style.display = 'none';
+      document.body.style.overflowY = '';
+    }
+  }, 380);
+}
+
+dataToggle.addEventListener('click', () => {
+  if (tabularOpen) closeTabularPanel(); else openTabularPanel();
+});
+tabularClose.addEventListener('click', closeTabularPanel);
+
+const TABULAR_FIELD_IDS = [
+  'fieldHiveTemp', 'fieldHiveHumidity', 'fieldHivePressure', 'fieldFrames',
+  'fieldWeatherTemp', 'fieldWeatherHumidity', 'fieldWeatherPressure',
+  'fieldWind', 'fieldCloud',
+  'fieldDate', 'fieldDevice', 'fieldHive',
+];
+
+resetTabular.addEventListener('click', () => {
+  TABULAR_FIELD_IDS.forEach(id => { document.getElementById(id).value = ''; });
+});
+
+// Collect tabular fields into an object; omit keys with empty values.
+function getTabularData() {
+  const get = id => document.getElementById(id).value;
+  const out = {};
+
+  // hive sensors
+  if (get('fieldHiveTemp'))     out.hive_temp         = get('fieldHiveTemp');
+  if (get('fieldHiveHumidity')) out.hive_humidity      = get('fieldHiveHumidity');
+  if (get('fieldHivePressure')) out.hive_pressure      = get('fieldHivePressure');
+  if (get('fieldFrames'))       out.frames             = get('fieldFrames');
+
+  // weather
+  if (get('fieldWeatherTemp'))      out.weather_temp      = get('fieldWeatherTemp');
+  if (get('fieldWeatherHumidity'))  out.weather_humidity  = get('fieldWeatherHumidity');
+  if (get('fieldWeatherPressure'))  out.weather_pressure  = get('fieldWeatherPressure');
+  if (get('fieldWind'))             out.wind_speed        = get('fieldWind');
+  if (get('fieldCloud'))            out.cloud_coverage    = get('fieldCloud');
+
+  // recording info
+  if (get('fieldDate'))   out.date        = get('fieldDate');
+  if (get('fieldDevice')) out.device      = get('fieldDevice');
+  if (get('fieldHive'))   out.hive_number = get('fieldHive');
+
+  return out;
+}
 
 // Gauge geometry — must match the <circle r="70"> in index.html
 const RING_CIRC = 2 * Math.PI * 70;
@@ -271,6 +342,11 @@ uploadBtn.addEventListener('click', async () => {
 
   const formData = new FormData();
   formData.append('file', currentFile);
+
+  const tabular = getTabularData();
+  for (const [key, val] of Object.entries(tabular)) {
+    formData.append(key, val);
+  }
 
   try {
     const res = await fetch('/spectral-inference', {

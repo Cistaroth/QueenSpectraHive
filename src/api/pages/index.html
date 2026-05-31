@@ -37,8 +37,8 @@
 
   <div class="overlay"></div>
 
-  <div class="stage">
-    <div class="upload-card">
+  <div class="stage" id="stage">
+    <div class="upload-card" id="uploadCard">
 
       <!-- Bee Logo -->
       <svg class="bee-logo" width="160" height="105" viewBox="-25 0 160 105" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -88,6 +88,15 @@
       </div>
 
       <div class="divider"></div>
+
+      <button class="btn-panel-toggle" id="dataToggle" aria-label="Open environmental data panel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12,2 22,8 22,16 12,22 2,16 2,8"/>
+          <line x1="12" y1="9" x2="12" y2="15"/>
+          <line x1="9" y1="12" x2="15" y2="12"/>
+        </svg>
+        Add Hive Data
+      </button>
 
       <div class="drop-zone" id="dropZone">
         <input type="file" id="fileInput" accept=".wav,audio/wav,audio/x-wav" />
@@ -151,6 +160,158 @@
 
       <p class="formats" id="formatsHint">WAV files only</p>
     </div>
+
+    <!-- TABULAR FEATURES SIDE PANEL -->
+    <div class="tabular-panel" id="tabularPanel" aria-hidden="true">
+
+      <div class="tabular-header">
+        <div class="tabular-title-row">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f5c842" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12,2 22,8 22,16 12,22 2,16 2,8"/>
+            <line x1="12" y1="8" x2="12" y2="16"/>
+            <line x1="8" y1="12" x2="16" y2="12"/>
+          </svg>
+          <h3 class="tabular-title">Hive Environment</h3>
+        </div>
+        <button class="tabular-close-btn" id="tabularClose" aria-label="Close panel">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="2" y1="2" x2="12" y2="12"/>
+            <line x1="12" y1="2" x2="2" y2="12"/>
+          </svg>
+        </button>
+      </div>
+
+      <p class="tabular-desc">Optional environmental context passed to the LSTM fusion model.</p>
+
+      <div class="tabular-divider"></div>
+
+      <div class="tabular-fields" id="tabularFields">
+
+        <!-- Hive Sensors -->
+        <div class="field-section">
+          <p class="field-section-title">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="rgba(245,200,66,0.5)">
+              <polygon points="12,2 22,8 22,16 12,22 2,16 2,8"/>
+            </svg>
+            Hive Sensors
+          </p>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label" for="fieldHiveTemp">Temperature</label>
+              <div class="field-with-unit">
+                <input type="number" class="field-input" id="fieldHiveTemp" name="hive_temp" step="0.1" placeholder="35.0" />
+                <span class="field-unit">°C</span>
+              </div>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="fieldHiveHumidity">Humidity</label>
+              <div class="field-with-unit">
+                <input type="number" class="field-input" id="fieldHiveHumidity" name="hive_humidity" step="0.1" min="0" max="100" placeholder="60" />
+                <span class="field-unit">%</span>
+              </div>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label" for="fieldHivePressure">Pressure</label>
+              <div class="field-with-unit">
+                <input type="number" class="field-input" id="fieldHivePressure" name="hive_pressure" step="0.1" placeholder="1013" />
+                <span class="field-unit">hPa</span>
+              </div>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="fieldFrames">Frames</label>
+              <input type="number" class="field-input" id="fieldFrames" name="frames" min="0" step="1" placeholder="10" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Weather -->
+        <div class="field-section">
+          <p class="field-section-title">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="rgba(245,200,66,0.5)">
+              <polygon points="12,2 22,8 22,16 12,22 2,16 2,8"/>
+            </svg>
+            Weather
+          </p>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label" for="fieldWeatherTemp">Temperature</label>
+              <div class="field-with-unit">
+                <input type="number" class="field-input" id="fieldWeatherTemp" name="weather_temp" step="0.1" placeholder="20.0" />
+                <span class="field-unit">°C</span>
+              </div>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="fieldWeatherHumidity">Humidity</label>
+              <div class="field-with-unit">
+                <input type="number" class="field-input" id="fieldWeatherHumidity" name="weather_humidity" step="0.1" min="0" max="100" placeholder="50" />
+                <span class="field-unit">%</span>
+              </div>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label" for="fieldWeatherPressure">Pressure</label>
+              <div class="field-with-unit">
+                <input type="number" class="field-input" id="fieldWeatherPressure" name="weather_pressure" step="0.1" placeholder="1013" />
+                <span class="field-unit">hPa</span>
+              </div>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="fieldWind">Wind Speed</label>
+              <div class="field-with-unit">
+                <input type="number" class="field-input" id="fieldWind" name="wind_speed" step="0.1" min="0" placeholder="0.0" />
+                <span class="field-unit">m/s</span>
+              </div>
+            </div>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="fieldCloud">Cloud Coverage</label>
+            <div class="field-with-unit">
+              <input type="number" class="field-input" id="fieldCloud" name="cloud_coverage" step="1" min="0" max="100" placeholder="0" />
+              <span class="field-unit">%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recording Info -->
+        <div class="field-section">
+          <p class="field-section-title">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="rgba(245,200,66,0.5)">
+              <polygon points="12,2 22,8 22,16 12,22 2,16 2,8"/>
+            </svg>
+            Recording Info
+          </p>
+          <div class="field-group">
+            <label class="field-label" for="fieldDate">Date &amp; Time</label>
+            <input type="datetime-local" class="field-input" id="fieldDate" name="date" />
+          </div>
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label" for="fieldDevice">Device №</label>
+              <input type="number" class="field-input" id="fieldDevice" name="device" min="1" max="2" step="1" placeholder="1" />
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="fieldHive">Hive №</label>
+              <input type="number" class="field-input" id="fieldHive" name="hive_number" min="1" max="5" step="1" placeholder="1" />
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="tabular-footer">
+        <div class="tabular-badge">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="#e8970a">
+            <polygon points="12,2 22,8 22,16 12,22 2,16 2,8"/>
+          </svg>
+          <span>LSTM Fusion · 21 features</span>
+        </div>
+        <button class="btn-reset-tabular" id="resetTabular">Clear</button>
+      </div>
+    </div>
+
   </div>
 
   <!-- LOADING SCREEN -->

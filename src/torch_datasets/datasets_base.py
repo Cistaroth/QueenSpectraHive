@@ -83,16 +83,11 @@ class BeeAudioDataset(LazyAudioDataset):
             logger.warning(f"Failed to load waveform at index {idx}: {e}. Using silence.")
             waveform = torch.zeros((1, self.TARGET_SR * 15))
 
-        try:
-            # Squeeze to get a 1D vector y
-            if waveform.dim() > 1:
-                waveform = waveform.mean(dim=0)
-            
-            features = self._get_features(idx, waveform)
+        # Squeeze to get a 1D vector y
+        if waveform.dim() > 1:
+            waveform = waveform.mean(dim=0)
 
-        except Exception as e:
-            logger.warning(f"AST feature extraction failed at index {idx}: {e}")
-            features = [torch.zeros((1024, 128))]
+        features = self._get_features(idx, waveform)
 
         return *features, label
 
