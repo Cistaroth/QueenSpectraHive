@@ -38,7 +38,7 @@ class HeaderModule(ModelPipelineStep):
         
         console.print(Panel(
             Align.center(
-                "[bold cyan]" + config.NAME + self._task + "[/bold cyan]"
+                "[bold cyan]" + config.APP_NAME + self._task + "[/bold cyan]"
             ),
             border_style="cyan",
             padding=(1, 2),

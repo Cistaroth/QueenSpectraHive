@@ -17,7 +17,7 @@ class Config(BaseSettings):
         extra="ignore",
     )
 
-    NAME: str
+    APP_NAME: str
     SEED: int
     TRAIN_TEST_SPLIT: float
     TRAIN_VALIDATION_SPLIT: float

@@ -14,7 +14,7 @@
 
 <br>
 <p align= "center">
-Classification of Queen Bee Presence using Tabular and Acoustic Data.
+Queen Bee or Not Queen Bee, that is the question.
 </p>
 
 ## Dataset
@@ -25,6 +25,8 @@ This project uses the following dataset found on Kaggle: [Dataset](https://www.k
 ## How to run
 > [!IMPORTANT]
 > To run the program, we provide two methods: Docker vs Manual. Refer to relevant sections.
+> [!NOTE]
+> The Pretrained Fusion LSTM is available, if you wish to make use of a different model, modify the code, especially src/api/routers/spectral_inference/inference_pipeline and insert your model into the trained_models/ directory.
 
 ### → Docker
 
