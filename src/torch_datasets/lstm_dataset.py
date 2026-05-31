@@ -11,10 +11,10 @@ class LSTMBeeAudioDataset(BeeAudioDataset):
     def __init__(
         self,
         features: pd.DataFrame,
-        labels: pd.Series,
         audio_dir: Path,
         n_mfcc: int,
-        columns_to_drop: list
+        columns_to_drop: list,
+        labels: pd.Series | None = None,
     ):
         super().__init__(features=features, labels=labels, audio_dir=audio_dir)
 
