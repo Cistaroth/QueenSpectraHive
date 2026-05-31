@@ -79,7 +79,7 @@ def main() -> None:
                 audio_path_col=settings.AUDIO_PATH_COL,
                 audio_dir=settings.AUDIO_DIR,
                 chunk_duration=settings.CHUNK_DURATION,
-            ),
+            ).set_dependency("y_train", -3),
 
             HyperparameterTuningStratifiedKFoldModule(
                 model_configuration=settings.HYPERPARAMETER_SETTINGS,
