@@ -9,6 +9,14 @@ class TrainerBase(ModelPipelineStep):
         pass
 
 class InferencerBase(ModelPipelineStep):
+    def __init__(self) -> None:
+        super().__init__()
+        # Positional indices of the input rows that predictions correspond to.
+        # None means every input row was predicted (no rows dropped). Inferencers
+        # that filter rows (e.g. missing audio) set this so the evaluator can
+        # realign y_test to the surviving rows.
+        self.last_kept_index = None
+
     @abstractmethod
     def inference(self, model, x_test) -> Any:
         pass

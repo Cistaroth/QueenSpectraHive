@@ -2,6 +2,7 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import Sequence
 
+import numpy as np
 import pandas as pd
 import torch
 
@@ -68,6 +69,9 @@ class BeeAudioDataset(LazyAudioDataset):
                 f"Dropping {missing} row(s) with no audio segments on disk: "
                 + str(features.loc[~mask, 'file name'].tolist())
             )
+        # Positional indices (into the input frame) of the rows that survive,
+        # so callers can realign external arrays such as y_test to the kept rows.
+        self.kept_index = np.where(mask.to_numpy())[0]
         features = features[mask].reset_index(drop=True)
         if labels is not None:
             labels = labels[mask].reset_index(drop=True)

@@ -122,6 +122,7 @@ class TransformerInferenceModule(InferencerBase):
         model.eval()
 
         loader = self._build_loader(x_test)
+        self.last_kept_index = loader.dataset.kept_index
 
         all_preds: list[np.ndarray] = []
         all_proba: list[np.ndarray] = []

@@ -103,6 +103,7 @@ class FusionLSTMInferenceModule(InferencerBase):
         model.eval()
 
         loader = self._build_loader(x_test)
+        self.last_kept_index = loader.dataset.kept_index
 
         all_preds, all_proba = [], []
         with torch.no_grad():
