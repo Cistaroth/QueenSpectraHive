@@ -40,16 +40,34 @@ class FusionLSTMModel(
             nn.Linear(ff_hidden_size, 1)
         )
 
-    def forward(self, historical_data: torch.Tensor, current_data: torch.Tensor):
+    def forward(
+        self,
+        historical_data: torch.Tensor,
+        current_data: torch.Tensor,
+        lengths: torch.Tensor | None = None,
+    ):
         lstm_output, _ = self.lstm(self.input_norm(historical_data))
 
         tabular_embedding_output = self.embeddings_model(current_data)
 
-        # Select the last LSTM output (final time step)
-        lstm_last_output = lstm_output[:, -1, :]
+        # Mean-pool the LSTM outputs over the REAL (unpadded) timesteps. This is robust
+        # to the very long MFCC sequences (the last hidden state forgets early audio)
+        # and, with the length mask, never averages in zero-padded steps — unlike the
+        # previous ``lstm_output[:, -1, :]`` which could read padding for short clips.
+        if lengths is not None:
+            max_len = lstm_output.size(1)
+            mask = (
+                torch.arange(max_len, device=lstm_output.device)[None, :]
+                < lengths.to(lstm_output.device)[:, None]
+            ).unsqueeze(-1).to(lstm_output.dtype)
+            summed = (lstm_output * mask).sum(dim=1)
+            counts = mask.sum(dim=1).clamp(min=1.0)
+            seq_representation = summed / counts
+        else:
+            seq_representation = lstm_output.mean(dim=1)
 
-        # Concatenate the LSTM output with current features
-        combined_features = torch.cat([lstm_last_output, tabular_embedding_output], dim=1)
+        # Concatenate the pooled sequence representation with current features
+        combined_features = torch.cat([seq_representation, tabular_embedding_output], dim=1)
 
         # Pass through the feed-forward component for final prediction
         result = self.ff(combined_features)

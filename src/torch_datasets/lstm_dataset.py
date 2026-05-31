@@ -9,14 +9,19 @@ from torch_datasets.datasets_base import BeeAudioDataset
 
 
 def pad_collate_fn(batch):
-    """Collate variable-length MFCC sequences by zero-padding to the batch maximum."""
+    """Collate variable-length MFCC sequences by zero-padding to the batch maximum.
+
+    Also returns the true (pre-padding) length of each sequence so the model can pool
+    over real timesteps only and ignore the zero padding.
+    """
     mels, tabulars, labels = zip(*[(b[0], b[1], b[2]) for b in batch])
+    lengths = torch.tensor([m.shape[0] for m in mels], dtype=torch.long)
     max_len = max(m.shape[0] for m in mels)
     n_feat = mels[0].shape[1]
     padded = torch.zeros(len(mels), max_len, n_feat)
     for i, m in enumerate(mels):
         padded[i, : m.shape[0]] = m
-    return padded, torch.stack(tabulars), torch.stack(labels)
+    return padded, torch.stack(tabulars), torch.stack(labels), lengths
 
 
 class LSTMBeeAudioDataset(BeeAudioDataset):

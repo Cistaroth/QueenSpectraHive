@@ -5,7 +5,7 @@ sys.path.append(str(Path(__file__).parents[2]))
 
 from pipeline import ModelPipeline
 from modules.utils.header import HeaderModule
-from modules.data_loading.kaggle_loader import KaggleDataLoaderModule
+#from modules.data_loading.kaggle_loader import KaggleDataLoaderModule
 from modules.data_loading.tabular_data_loader import TabularDataLoaderModule
 from modules.tabular.tabular_utils import (
     TabularColumnDropperModule,
@@ -46,10 +46,10 @@ def main() -> None:
             HeaderModule(task=settings.TASK_NAME),
 
             # Load data from Kaggle
-            KaggleDataLoaderModule(
-                dataset_handle=settings.DATASET_HANDLE,
-                output_dir=settings.OUTPUT_DIR,
-            ),
+            # KaggleDataLoaderModule(
+            #     dataset_handle=settings.DATASET_HANDLE,
+            #     output_dir=settings.OUTPUT_DIR,
+            # ),
 
             # Load tabular data
             TabularDataLoaderModule(

@@ -79,13 +79,18 @@ class FusionLSTMSettings(BaseModel):
         model_hyperparameters={
             "drop_column":                [["file name", "start_sec", "end_sec"]],
             "embeddings_model":                     [(nn.Linear(21, 64), nn.ReLU(), nn.Linear(64, 32))],
-            "lstm_layers":                [(40, 128, 2, 0.3)],
+            # Shrunk from hidden=128 and raised dropout to fight the overfitting seen
+            # on this small, few-hive dataset (seq_input_size, hidden, layers, dropout).
+            "lstm_layers":                [(40, 64, 2, 0.4)],
             "classification_hidden_size": [64],
             "audio_dir":                  [str(AUDIO_DIR)],
             "n_mfcc":                     [40],
-            "epochs":                     [1],
+            # Ceiling only; early stopping (patience=5) ends training near the best epoch.
+            "epochs":                     [30],
             "batch_size":                 [8],
             "learning_rate":              [1e-4],
+            "weight_decay":               [1e-4],
+            "patience":                   [5],
         },
         metric="accuracy",
     )

@@ -34,6 +34,8 @@ class FusionLSTMTrainModule(TrainerBase):
         epochs: int,
         batch_size: int,
         learning_rate: float,
+        weight_decay: float = 1e-4,
+        patience: int | None = 5,
         num_workers: int = 0,
         seed: int = 42,
         device: str | None = None,
@@ -52,6 +54,12 @@ class FusionLSTMTrainModule(TrainerBase):
             epochs (int): Number of epochs to train the model.
             batch_size (int): Batch size to use during training.
             learning_rate (float): Learning rate to use during training.
+            weight_decay (float): L2 regularization strength for Adam, to curb the
+                overfitting seen on this small dataset. Defaults to 1e-4.
+            patience (int | None): Early-stopping patience in epochs. Training stops when
+                the validation loss has not improved for this many epochs (the best
+                checkpoint is restored regardless). None disables early stopping.
+                Defaults to 5.
             num_workers (int): Number of workers for data loading. Defaults to 0.
             seed (int): Random seed for reproducibility. Defaults to 42.
             device (str | None): Device to use for training. Defaults to None.
@@ -71,6 +79,8 @@ class FusionLSTMTrainModule(TrainerBase):
         self._epochs = epochs
         self._batch_size = batch_size
         self._lr = learning_rate
+        self._weight_decay = weight_decay
+        self._patience = patience
         self._num_workers = num_workers
         self._seed = seed
         self._save_path = save_path
@@ -173,6 +183,7 @@ class FusionLSTMTrainModule(TrainerBase):
         best_val_loss = float("inf")
         best_state: dict | None = None
         best_epoch: int | None = None
+        epochs_without_improvement = 0
 
         for epoch in range(1, self._epochs + 1):
             model.train()
@@ -183,13 +194,13 @@ class FusionLSTMTrainModule(TrainerBase):
             if verbose:
                 logger.info(f"Epoch {epoch}/{self._epochs} - Training...")
 
-            for batch_features, batch_tabular_features, batch_labels in train_loader:
+            for batch_features, batch_tabular_features, batch_labels, batch_lengths in train_loader:
                 batch_features = batch_features.to(self._device)
                 batch_tabular_features = batch_tabular_features.to(self._device)
                 batch_labels = batch_labels.to(self._device)
 
                 optimiser.zero_grad()
-                logits = model(batch_features, batch_tabular_features)
+                logits = model(batch_features, batch_tabular_features, batch_lengths)
                 loss = criterion(logits.squeeze(1), batch_labels.float())
                 loss.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -213,6 +224,9 @@ class FusionLSTMTrainModule(TrainerBase):
                     best_val_loss = val_loss
                     best_epoch = epoch
                     best_state = copy.deepcopy(model.state_dict())
+                    epochs_without_improvement = 0
+                else:
+                    epochs_without_improvement += 1
 
                 if verbose:
                     logger.info(
@@ -221,6 +235,16 @@ class FusionLSTMTrainModule(TrainerBase):
                         f"val_loss={val_loss:.4f}  val_acc={val_acc:.4f}  |  "
                         f"pred 0={pred_zeros} 1={pred_ones}  actual 0={actual_zeros} 1={actual_ones}"
                     )
+
+                # Early stopping: bail out once validation loss has stalled. The best
+                # checkpoint is restored below, so we never keep the over-trained tail.
+                if self._patience is not None and epochs_without_improvement >= self._patience:
+                    if verbose:
+                        logger.info(
+                            f"Early stopping at epoch {epoch}: no val_loss improvement "
+                            f"for {self._patience} epoch(s) (best epoch {best_epoch})."
+                        )
+                    break
             elif verbose:
                 logger.info(
                     f"Epoch completed [{epoch:>3}/{self._epochs}]  "
@@ -258,12 +282,12 @@ class FusionLSTMTrainModule(TrainerBase):
         actual_zeros = 0
         actual_ones = 0
 
-        for batch_features, batch_tabular_features, batch_labels in loader:
+        for batch_features, batch_tabular_features, batch_labels, batch_lengths in loader:
             batch_features = batch_features.to(self._device)
             batch_tabular_features = batch_tabular_features.to(self._device)
             batch_labels = batch_labels.to(self._device)
 
-            logits = model(batch_features, batch_tabular_features)
+            logits = model(batch_features, batch_tabular_features, batch_lengths)
             loss = criterion(logits.squeeze(1), batch_labels.float())
 
             running_loss += loss.item() * len(batch_labels)
@@ -324,7 +348,9 @@ class FusionLSTMTrainModule(TrainerBase):
         ).to(self._device)
 
         criterion = nn.BCEWithLogitsLoss()
-        optimiser = torch.optim.Adam(model.parameters(), lr=self._lr)
+        optimiser = torch.optim.Adam(
+            model.parameters(), lr=self._lr, weight_decay=self._weight_decay
+        )
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimiser, T_max=self._epochs)
 
         if verbose:

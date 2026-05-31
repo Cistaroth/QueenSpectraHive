@@ -107,11 +107,11 @@ class FusionLSTMInferenceModule(InferencerBase):
 
         all_preds, all_proba = [], []
         with torch.no_grad():
-            for batch_mel, batch_tabular, _ in loader:
+            for batch_mel, batch_tabular, _, batch_lengths in loader:
                 batch_mel = batch_mel.to(self._device)
                 batch_tabular = batch_tabular.to(self._device)
 
-                logits = model(batch_mel, batch_tabular)
+                logits = model(batch_mel, batch_tabular, batch_lengths)
                 probs = torch.sigmoid(logits.squeeze(1))
                 preds = (probs > self._threshold).long()
 
