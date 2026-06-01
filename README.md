@@ -68,8 +68,9 @@ git clone https://github.com/Cistaroth/QueenSpectraHive.git
 # Move into folder
 cd "QueenSpectraHive"
 
-# Install all required libraries
-uv sync
+# Install all required libraries, first option is for cpu, second option is for gpu
+uv sync --extra gpu
+uv sync --extra cpu
 
 # Set up environment files - Insert values into .env afterwards
 cp .env.example .env
