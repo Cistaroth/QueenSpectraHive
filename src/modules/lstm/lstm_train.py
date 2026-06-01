@@ -368,7 +368,11 @@ class FusionLSTMTrainModule(TrainerBase):
             logger.info("Building dataloaders...")
 
         train_loader = self._build_dataloader(x_train, y_train)
-        val_loader = self._build_dataloader(x_val, y_val)
+        val_loader = (
+            self._build_dataloader(x_val, y_val)
+            if x_val is not None and y_val is not None
+            else None
+        )
 
         model = FusionLSTMModel(
             lstm_layers=self._lstm_layers,
