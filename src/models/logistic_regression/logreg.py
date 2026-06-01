@@ -9,12 +9,12 @@ from modules.data_loading.kaggle_loader import KaggleDataLoaderModule
 from modules.data_loading.tabular_data_loader import TabularDataLoaderModule
 from modules.tabular.tabular_utils import (
     TabularColumnDropperModule,
-    TabularOneHotEncoderModule,
+    TabularTrainTestOneHotEncoderModule,
 )
 from modules.tabular.tabular_feature_extractor import (
     TabularTimeColumnEncoderModule,
 )
-from modules.tabular.tabular_imputation import TabularColumnMeanImputerModule
+from modules.tabular.tabular_imputation import TabularTrainTestMeanImputerModule
 from modules.tabular.tabular_splitters import (
     TabularFeatureTargetSplitterModule,
     TabularTrainTestSplitterModule,
@@ -31,37 +31,23 @@ from models.logistic_regression.settings import (
 settings = LogisticRegressionSettings()
 
 def main() -> None:
-    """
-    Main function to run the data downloader pipeline
-
-    Args:
-        None
-
-    Returns:
-        None
-    """
     ModelPipeline(
         steps = [
-            # Print header
             HeaderModule(task=settings.TASK_NAME),
 
-            # Load data from Kaggle
             KaggleDataLoaderModule(
                 dataset_handle=settings.DATASET_HANDLE,
                 output_dir=settings.OUTPUT_DIR,
             ),
 
-            # Load tabular data
             TabularDataLoaderModule(
                 filepath=settings.CSV_FILEPATH
             ),
 
-            # Drop irrelevant columns
             TabularColumnDropperModule(
                 drop_columns=settings.DROP_COLUMNS
             ),
 
-            # Extract time features
             TabularTimeColumnEncoderModule(
                 time_column=settings.TIME_COLUMN,
                 time_features=settings.TIME_FEATURES,
@@ -71,37 +57,32 @@ def main() -> None:
                 drop_columns=settings.TIME_FEATURES
             ),
 
-            # One-hot encode
-            TabularOneHotEncoderModule(
-                columns_to_encode=settings.ONEHOT_COLUMNS
-            ),
-
-            # Mean impute missing values
-            TabularColumnMeanImputerModule(
-                impute_columns=settings.IMPUTE_COLUMNS
-            ),
-
-            # Split features and target
             TabularFeatureTargetSplitterModule(
                 target_column=settings.TARGET_COLUMN
             ),
 
-            # Train-test split
             TabularTrainTestSplitterModule(
                 train_test_split=settings.TRAIN_TEST_SPLIT,
                 random_state=settings.SEED,
+                group_column=settings.GROUP_COLUMN,
             ),
 
-            # Model Training using K-Fold Cross Validation
+            TabularTrainTestOneHotEncoderModule(
+                columns_to_encode=settings.ONEHOT_COLUMNS
+            ),
+
+            TabularTrainTestMeanImputerModule(
+                impute_columns=settings.IMPUTE_COLUMNS
+            ),
+
             HyperparameterTuningStratifiedKFoldModule(
                 model_configuration=settings.HYPERPARAMETER_SETTINGS
-            ),
+            ).set_dependency("y_train", -3),
 
-            # Model Evaluation
             ModelEvaluatorModule(
                 inferencer=settings.HYPERPARAMETER_SETTINGS.model_inference,
                 class_names=settings.class_names,
-            ).set_dependency(["x_test", "y_test"], -2),
+            ).set_dependency({"x_test": -2, "y_test": -4}),
         ],
     ).run()
 

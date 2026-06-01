@@ -67,7 +67,9 @@ class LogRegTrainModule(TrainerBase):
     def train(
         self,
         x_train: pd.DataFrame,
-        y_train: pd.DataFrame
+        y_train: pd.DataFrame,
+        x_val: pd.DataFrame,
+        y_val: pd.DataFrame,
     ) -> LogisticRegression:
         """
         Train a logistic regression model and return the trained model.

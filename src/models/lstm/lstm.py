@@ -8,17 +8,16 @@ from modules.utils.header import HeaderModule
 from modules.data_loading.kaggle_loader import KaggleDataLoaderModule
 from modules.data_loading.tabular_data_loader import TabularDataLoaderModule
 from modules.tabular.tabular_feature_extractor import TabularTimeColumnEncoderModule
-from modules.tabular.tabular_imputation import TabularColumnMeanImputerModule
+from modules.tabular.tabular_imputation import TabularTrainTestMeanImputerModule
 from modules.tabular.tabular_utils import (
     TabularColumnDropperModule,
-    TabularOneHotEncoderModule,
+    TabularTrainTestOneHotEncoderModule,
 )
 from modules.tabular.tabular_splitters import (
     TabularFeatureTargetSplitterModule,
     TabularTrainTestSplitterModule,
 )
 from modules.data_augmentation.audio_splicing import AudioSplicerModule
-from modules.data_augmentation.tabular_interpolation import TabularSMOTE
 from modules.hyperparameter_tuning.hyperparameter_tuning import (
     HyperparameterTuningStratifiedKFoldModule,
 )
@@ -56,14 +55,6 @@ def main() -> None:
                 drop_columns=settings.TIME_FEATURES,
             ),
 
-            TabularOneHotEncoderModule(
-                columns_to_encode=settings.ONEHOT_COLUMNS,
-            ),
-
-            TabularColumnMeanImputerModule(
-                impute_columns=settings.IMPUTE_COLUMNS,
-            ),
-
             TabularFeatureTargetSplitterModule(
                 target_column=settings.TARGET_COLUMN,
             ),
@@ -71,24 +62,31 @@ def main() -> None:
             TabularTrainTestSplitterModule(
                 train_test_split=settings.TRAIN_TEST_SPLIT,
                 random_state=settings.SEED,
+                group_column=settings.GROUP_COLUMN,
             ),
 
-            TabularSMOTE(),
+            TabularTrainTestOneHotEncoderModule(
+                columns_to_encode=settings.ONEHOT_COLUMNS,
+            ),
+
+            TabularTrainTestMeanImputerModule(
+                impute_columns=settings.IMPUTE_COLUMNS,
+            ),
 
             AudioSplicerModule(
                 audio_path_col=settings.AUDIO_PATH_COL,
                 audio_dir=settings.AUDIO_DIR,
                 chunk_duration=settings.CHUNK_DURATION,
-            ),
+                oversample=False,
+            ).set_dependency("y_train", -3),
 
             HyperparameterTuningStratifiedKFoldModule(
                 model_configuration=settings.HYPERPARAMETER_SETTINGS,
             ),
-
             ModelEvaluatorModule(
                 inferencer=settings.HYPERPARAMETER_SETTINGS.model_inference,
                 class_names=settings.class_names,
-            ).set_dependency(["x_test", "y_test"], -4),
+            ).set_dependency({"x_test": -3, "y_test": -5}),
         ],
     ).run()
 

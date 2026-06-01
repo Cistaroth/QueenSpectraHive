@@ -1,5 +1,6 @@
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     confusion_matrix,
@@ -198,6 +199,24 @@ class ModelEvaluatorModule(ModelPipelineStep):
         # Use the inferencer to make predictions and calculate probabilities (if supported)
         inferencer = self._inferencer()
         y_pred = inferencer.inference(model, x_test_scaled)
+
+        # Some inferencers drop input rows
+        kept_index = inferencer.last_kept_index
+        if kept_index is not None:
+            dropped = len(y_test) - len(kept_index)
+            if dropped:
+                logger.warning(
+                    f"Inferencer dropped {dropped} row(s); evaluating on the "
+                    f"remaining {len(kept_index)} of {len(y_test)} test samples."
+                )
+
+            y_test = y_test.iloc[kept_index]
+
+        if len(y_pred) != len(y_test):
+            raise ValueError(
+                f"Prediction/label length mismatch after alignment: "
+                f"{len(y_pred)} predictions vs {len(y_test)} labels."
+            )
 
         try:
             y_pred_proba = inferencer.inference_proba(model, x_test_scaled)

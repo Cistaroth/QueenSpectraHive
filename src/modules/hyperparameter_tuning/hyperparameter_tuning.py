@@ -1,3 +1,5 @@
+import inspect
+from functools import partial
 from typing import Any
 
 import numpy as np
@@ -14,12 +16,18 @@ from rich.progress import (
 from rich.table import Table
 from sklearn.metrics import (
     accuracy_score,
+    balanced_accuracy_score,
     f1_score,
     precision_score,
     recall_score,
     roc_auc_score,
 )
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import (
+    GroupShuffleSplit,
+    StratifiedGroupKFold,
+    StratifiedKFold,
+    train_test_split,
+)
 
 from config import config
 from logger import console, logger
@@ -51,7 +59,9 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
 
         self._metrics = {
             "accuracy": accuracy_score,
+            "balanced_accuracy": balanced_accuracy_score,
             "f1": f1_score,
+            "f1_macro": partial(f1_score, average="macro"),
             "precision": precision_score,
             "recall": recall_score,
             "roc_auc": roc_auc_score,
@@ -64,10 +74,54 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
                 f"Supported metrics: {supported_metrics}"
             )
 
-    def _get_varying_keys(
-        self,
-        configs: dict[str, Any]
-    ) -> set[str]:
+    def _extract_groups(self, x_train: pd.DataFrame) -> np.ndarray | None:
+        """
+        Build a per-row group id from the configured group column.
+
+        By the time tuning runs the group column has usually been one-hot encoded
+        (e.g. ``hive number`` -> ``hive number_3``/``_4``/``_5``), so the raw column may
+        be gone. This reconstructs a stable group key from either the raw column or its
+        one-hot children, so grouped cross-validation can keep every group on one side
+        of each fold. Returns None when no group column is configured or matched.
+
+        Args:
+            x_train (pd.DataFrame): The training features.
+        Returns:
+            np.ndarray | None: Group label per row, or None if grouping is unavailable.
+        """
+        group_column = self._model_configuration.group_column
+        if not group_column:
+            return None
+        cols = [
+            c
+            for c in x_train.columns
+            if c == group_column or c.startswith(f"{group_column}_")
+        ]
+        if not cols:
+            return None
+        return x_train[cols].astype(str).agg("|".join, axis=1).to_numpy()
+
+    def _train_param_names(self, trainer: Any) -> set[str]:
+        """
+        Return the set of parameter names accepted by a trainer's ``train`` method.
+
+        Used to decide, at runtime, whether a given trainer supports optional
+        arguments such as ``x_val``/``y_val`` (for validation-based checkpoint
+        selection) or ``save_model`` (for controlling disk persistence). This keeps
+        the tuning loop generic across trainers with different ``train`` signatures
+        (e.g. the logistic-regression trainer takes no validation set).
+
+        Args:
+            trainer (Any): A trainer instance exposing a ``train`` method.
+        Returns:
+            set[str]: Parameter names of ``trainer.train``.
+        """
+        try:
+            return set(inspect.signature(trainer.train).parameters)
+        except (TypeError, ValueError):
+            return set()
+
+    def _get_varying_keys(self, configs: dict[str, Any]) -> set[str]:
         """
         Return only the keys whose values differ across at least two configs.
 
@@ -89,14 +143,14 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
     ) -> str:
         """
         Format only the non-constant parameters into a nice string for display in the results table.
-        
+
         Args:
             model_params (dict[str, Any]): The model parameters to format.
             transformer_params (dict[str, Any]): The transformer parameters to format.
             varying_model_keys (set[str]): The model parameter keys that vary across configs.
             varying_transformer_keys (set[str]): The transformer parameter keys that vary across configs.
         Returns:
-            str: A formatted string of the varying parameters and their values, 
+            str: A formatted string of the varying parameters and their values,
                 or "(default)" if all parameters are constant.
         """
         parts = [
@@ -187,7 +241,9 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
 
         # Get keys that will be displayed
         varying_model_keys = self._get_varying_keys(cfg.model_hyperparameters)
-        varying_transformer_keys = self._get_varying_keys(cfg.transformer_hyperparameters)
+        varying_transformer_keys = self._get_varying_keys(
+            cfg.transformer_hyperparameters
+        )
 
         # Print the tuning configuration to the console
         if verbose:
@@ -199,12 +255,16 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
             )
             console.print()
 
-        # Set up stratified k-fold cross-validation and run the tuning process
+        groups = self._extract_groups(x_train)
+        n_groups = len(np.unique(groups)) if groups is not None else 0
+        use_grouped_cv = groups is not None and n_groups >= cfg.folds
+
         folds = StratifiedKFold(
             n_splits=cfg.folds,
             shuffle=True,
             random_state=config.SEED,
         )
+
         cv_results: list[dict[str, Any]] = []
 
         # Build progress bar for tuning process
@@ -225,10 +285,7 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
         total_combos = len(model_grid) * len(transformer_grid)
 
         with Progress(
-            *progress_columns,
-            console=console,
-            disable=not verbose,
-            transient=True
+            *progress_columns, console=console, disable=not verbose, transient=True
         ) as progress:
             task = progress.add_task("Tuning", total=total_steps)
 
@@ -248,9 +305,10 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
                         ),
                     )
 
-                    # Run cross-validation for the current set of model parameters
-                    fold_scores: list[float] = []
-                    for train_idx, val_idx in folds.split(x_train, y_train):
+                    fold_scores = []
+                    for train_idx, val_idx in folds.split(
+                        x_train, y_train, groups=groups if use_grouped_cv else None
+                    ):
                         # Get the training and validation folds
                         x_train_fold = x_train.iloc[train_idx]
                         x_val_fold = x_train.iloc[val_idx]
@@ -263,9 +321,29 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
                         x_train_transformed = transformer.fit_transform(x_train_fold)
                         x_val_transformed = transformer.transform(x_val_fold)
 
-                        # Train the model on the training fold and evaluate on the validation fold
+                        # Apply resampler
+                        if cfg.resampler is not None:
+                            resampler = cfg.resampler(**cfg.resampler_parameters)
+                            resampled = resampler.run(
+                                x_train_transformed, y_train_fold, verbose=False
+                            )
+                            x_train_transformed = resampled["x_train"]
+                            y_train_fold = resampled["y_train"]
+
+                        # Train the model on the training fold and evaluate it on the validation fold
                         trainer = cfg.model_train(**model_parameter)
-                        model = trainer.train(x_train_transformed, y_train_fold, x_val_transformed, y_val_fold)
+                        fold_kwargs = (
+                            {"save_model": False}
+                            if "save_model" in self._train_param_names(trainer)
+                            else {}
+                        )
+                        model = trainer.train(
+                            x_train_transformed,
+                            y_train_fold,
+                            x_val_transformed,
+                            y_val_fold,
+                            **fold_kwargs,
+                        )
 
                         inferencer = cfg.model_inference()
                         y_pred = inferencer.inference(model, x_val_transformed)
@@ -300,17 +378,25 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
                 )
             )
             console.print()
-            logger.info(
-                "Starting refitting transformer and training final model on full training set."
-            )
+            logger.info("Starting refitting transformer and training the final model.")
 
-        # Refit the transformer on the full training set with the best transformer parameters
         final_transformer = cfg.transformer(**best_result["transformer_parameter"])
-        x_train_transformed = final_transformer.fit_transform(x=x_train)
-
-        # Train the final model with the best parameters
         final_trainer = cfg.model_train(**best_result["model_parameter"])
-        best_model = final_trainer.train(x_train_transformed, y_train)
+        train_params = self._train_param_names(final_trainer)
+        save_kwargs = {"save_model": True} if "save_model" in train_params else {}
+
+        x_train_transformed = final_transformer.fit_transform(x=x_train)
+        y_refit = y_train
+
+        if cfg.resampler is not None:
+            resampler = cfg.resampler(**cfg.resampler_parameters)
+            resampled = resampler.run(x_train_transformed, y_train, verbose=False)
+            x_train_transformed = resampled["x_train"]
+            y_refit = resampled["y_train"]
+
+        best_model = final_trainer.train(
+            x_train_transformed, y_refit, None, None, **save_kwargs
+        )
 
         if verbose:
             logger.info("Finished hyperparameter tuning.")

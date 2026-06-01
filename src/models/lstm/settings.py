@@ -33,7 +33,8 @@ class FusionLSTMSettings(BaseModel):
     AUDIO_PATH_COL: str = "file name"
     TARGET_COLUMN: str = "queen presence"
 
-    # Tabular feature engineering
+    GROUP_COLUMN: str = "hive number"
+
     TIME_COLUMN: str = "date"
     TIME_FEATURES: list[str] = ["hour", "minute", "day", "day_of_week", "week_of_year"]
     ONEHOT_COLUMNS: list[str] = ["device", "hive number"]
@@ -60,7 +61,7 @@ class FusionLSTMSettings(BaseModel):
         model_inference=FusionLSTMInferenceModule,
         model_hyperparameters={
             "drop_column":                [["file name", "start_sec", "end_sec"]],
-            "embeddings_model":                     [(nn.Linear(21, 64), nn.ReLU(), nn.Linear(64, 32))],
+            "embeddings_model":           [(nn.Linear(21, 64), nn.ReLU(), nn.Linear(64, 32))],
             "lstm_layers":                [(40, 128, 2, 0.3)],
             "classification_hidden_size": [64],
             "audio_dir":                  [str(AUDIO_DIR)],

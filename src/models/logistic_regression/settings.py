@@ -6,6 +6,7 @@ from modules.hyperparameter_tuning.hyperparameter_tuning import FineTuningConfig
 from modules.logreg.logreg_train import LogRegTrainModule
 from modules.logreg.logreg_inference import LogRegInferenceModule
 from modules.tabular.tabular_scalers import TabularStandardScalerModule
+from modules.data_augmentation.tabular_interpolation import TabularSMOTE
 from config import config
 
 class LogisticRegressionSettings(BaseModel):
@@ -38,6 +39,7 @@ class LogisticRegressionSettings(BaseModel):
     ONEHOT_COLUMNS: list[str] = ["device", "hive number"]
     IMPUTE_COLUMNS: list[str] = ["wind speed", "weather temp"]
     TARGET_COLUMN: str = "queen presence"
+    GROUP_COLUMN: str = "hive number"
     TRAIN_TEST_SPLIT: float = config.TRAIN_TEST_SPLIT
 
     HYPERPARAMETER_SETTINGS: FineTuningConfiguration = FineTuningConfiguration(
@@ -45,6 +47,9 @@ class LogisticRegressionSettings(BaseModel):
         model_train=LogRegTrainModule,
         model_inference=LogRegInferenceModule,
         transformer=TabularStandardScalerModule,
+        resampler=TabularSMOTE,
+        resampler_parameters={"seed": SEED},
+        group_column=GROUP_COLUMN,
         model_hyperparameters={
             "C": [0.01, 0.1, 1, 10, 100],
             "l1_ratio": [0, 0.25, 0.5, 0.75, 1],

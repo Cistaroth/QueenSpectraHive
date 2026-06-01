@@ -54,7 +54,8 @@ class TabularColumnDropperModule(ModelPipelineStep):
             )
 
         return result
-    
+
+
 class TabularOneHotEncoderModule(ModelPipelineStep):
     name = "OneHotEncoder"
     inputs = {"dataframe"}
@@ -87,7 +88,7 @@ class TabularOneHotEncoderModule(ModelPipelineStep):
     ) -> dict[str, pd.DataFrame]:
         """
         One-hot encode columns in the dataframe
-        
+
         Args:
             dataframe (pd.DataFrame): The dataframe to one-hot encode
             verbose (bool, optional): Verbose mode. Defaults to True.
@@ -114,3 +115,73 @@ class TabularOneHotEncoderModule(ModelPipelineStep):
             )
 
         return result
+
+
+class TabularTrainTestOneHotEncoderModule(ModelPipelineStep):
+    name = "TabularTrainTestOneHotEncoder"
+    inputs = {"x_train", "x_test"}
+    outputs = {"x_train", "x_test"}
+
+    def __init__(
+        self,
+        columns_to_encode: list[str],
+        drop_first: bool = True,
+    ) -> None:
+        """
+        Initialize the one-hot encoder class
+        
+        Args:
+            columns_to_encode (list[str]): The columns to encode
+            drop_first (bool, optional): Whether to drop the first column.
+                Defaults to True.
+        Returns:
+            None
+        """
+        super().__init__()
+
+        self._columns_to_encode = columns_to_encode
+        self._drop_first = drop_first
+        self._train_columns = None
+        
+
+    def run(
+        self,
+        x_train: pd.DataFrame,
+        x_test: pd.DataFrame,
+        verbose: bool = True,
+    ) -> dict[str, pd.DataFrame]:
+        if verbose:
+            console.section(title="One-hot encoding (train-fit only)")
+            logger.info(f"Columns to encode: {self._columns_to_encode}")
+
+        x_train = x_train.copy()
+        x_test = x_test.copy()
+
+        for col in self._columns_to_encode:
+            if col not in x_train.columns:
+                continue
+            cats = sorted(set(x_train[col].dropna()) | set(x_test[col].dropna()))
+            x_train[col] = x_train[col].astype(pd.CategoricalDtype(cats))
+            x_test[col] = x_test[col].astype(pd.CategoricalDtype(cats))
+
+        x_train_enc = pd.get_dummies(
+            data=x_train,
+            columns=self._columns_to_encode,
+            drop_first=self._drop_first,
+            dtype=int,
+        )
+        self._train_columns = x_train_enc.columns.tolist()
+
+        x_test_enc = pd.get_dummies(
+            data=x_test,
+            columns=self._columns_to_encode,
+            drop_first=self._drop_first,
+            dtype=int,
+        ).reindex(columns=self._train_columns, fill_value=0)
+
+        if verbose:
+            logger.info(
+                f"Finished one-hot encoding. Dataframe shape: {x_train_enc.shape}"
+            )
+
+        return {"x_train": x_train_enc, "x_test": x_test_enc}
