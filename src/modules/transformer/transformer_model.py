@@ -2,25 +2,27 @@ import torch
 from torch import nn
 from transformers import ASTForAudioClassification
 
+
 class AudioTransformer(nn.Module):
     """
     This model loads a pretrained AST checkpoint from Hugging Face and adapts it
-    for two classes for on bee audio data.
+    to classify bee audio data.
     """
 
     def __init__(
         self,
-        num_classes: int = 2,
+        num_classes: int = 1,
         pretrained_model: str = "MIT/ast-finetuned-audioset-10-10-0.4593",
     ) -> None:
-        """"
+        """
         Initialize the model.
 
         Args:
-            num_classes (int): Number of classes. Defaults to 2.
+            num_classes (int): Number of output units of the classification head.
+                Defaults to 1.
             pretrained_model (str): Hugging Face model ID for AST feature extractor.
                 Defaults to "MIT/ast-finetuned-audioset-10-10-0.4593".
-        
+
         Returns:
             None
         """

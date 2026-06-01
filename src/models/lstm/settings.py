@@ -10,14 +10,6 @@ from modules.lstm.lstm_inference import FusionLSTMInferenceModule
 
 
 class FusionLSTMSettings(BaseModel):
-    """
-    All configuration for the Fusion LSTM pipeline.
-
-    The model fuses an audio branch (MFCC sequences -> LSTM) with a tabular
-    branch (engineered features -> MLP). The two representations are concatenated
-    and passed through a small feed-forward head for the final prediction.
-    """
-
     model_config = {"arbitrary_types_allowed": True}
 
     TASK_NAME: str = "LSTM"

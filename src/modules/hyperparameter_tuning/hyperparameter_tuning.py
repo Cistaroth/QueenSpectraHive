@@ -23,10 +23,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from sklearn.model_selection import (
-    GroupShuffleSplit,
-    StratifiedGroupKFold,
     StratifiedKFold,
-    train_test_split,
 )
 
 from config import config

@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -13,11 +14,6 @@ from torch_datasets.transformer_dataset import TransformerBeeAudioDataset
 
 
 class TransformerInferenceModule(InferencerBase):
-    """
-    Pipeline step that runs inference with a fine-tuned Audio Spectrogram Transformer.
-
-    """
-
     name = "TransformerInference"
     inputs = {"model", "x_test"}
     outputs = {"y_pred", "y_pred_proba"}
@@ -49,7 +45,6 @@ class TransformerInferenceModule(InferencerBase):
         super().__init__()
         resolved_audio = Path(audio_dir)
         if not resolved_audio.is_absolute():
-            # Resolves cleanly up to your project's master root data folder
             resolved_audio = Path(__file__).resolve().parents[2] / "data" / "sound_files" / "sound_files"
 
         self._audio_dir = resolved_audio
@@ -62,8 +57,6 @@ class TransformerInferenceModule(InferencerBase):
         if device is None:
             if torch.cuda.is_available():
                 self._device = torch.device("cuda")
-            elif torch.backends.mps.is_available():
-                self._device = torch.device("mps")
             else:
                 self._device = torch.device("cpu")
         else:
@@ -122,9 +115,12 @@ class TransformerInferenceModule(InferencerBase):
         model.eval()
 
         loader = self._build_loader(x_test)
+        self.last_kept_index = cast(
+            TransformerBeeAudioDataset, loader.dataset
+        ).kept_index
 
-        all_preds: list[np.ndarray] = []
-        all_proba: list[np.ndarray] = []
+        all_preds = []
+        all_proba = []
 
         with torch.no_grad():
             for batch_mel, _ in loader:

@@ -178,7 +178,6 @@ class AudioSplicerModule(ModelPipelineStep):
                     "Oversampling disabled. \n"
                     f"Keeping original class distribution: \n: {y_train.value_counts()}"
                     "\nClass imbalance should be handled downstream "
-                    "(e.g. pos_weight in BCEWithLogitsLoss)."
                 )
         else:
             if verbose:

@@ -25,6 +25,7 @@ This project uses the following dataset found on Kaggle: [Dataset](https://www.k
 ## How to run
 > [!IMPORTANT]
 > To run the program, we provide two methods: Docker vs Manual. Refer to relevant sections.
+
 > [!NOTE]
 > The Pretrained Fusion LSTM is available, if you wish to make use of a different model, modify the code, especially src/api/routers/spectral_inference/inference_pipeline and insert your model into the trained_models/ directory.
 
@@ -38,14 +39,14 @@ From here, run the following commands:
 # Clone repository
 git clone https://github.com/Cistaroth/QueenSpectraHive.git
 
-# Move into src
+# Move into folder
 cd "QueenSpectraHive"
 
 # Set up environment files - Insert values into .env afterwards
 cp .env.example .env
 
 # Run docker
-docker compose up
+docker compose up --build
 
 # The service now runs on HOST:PORT
 ```
@@ -64,7 +65,7 @@ From here, run the following commands:
 # Clone repository
 git clone https://github.com/Cistaroth/QueenSpectraHive.git
 
-# Move into src
+# Move into folder
 cd "QueenSpectraHive"
 
 # Install all required libraries

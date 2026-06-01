@@ -8,10 +8,10 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from modules.model_bases import TrainerBase
 from logger import console, logger
-from torch_datasets.lstm_dataset import LSTMBeeAudioDataset, pad_collate_fn
 from modules.lstm.lstm_model import FusionLSTMModel
+from modules.model_bases import TrainerBase
+from torch_datasets.lstm_dataset import LSTMBeeAudioDataset, pad_collate_fn
 
 
 class FusionLSTMTrainModule(TrainerBase):
@@ -39,7 +39,7 @@ class FusionLSTMTrainModule(TrainerBase):
         num_workers: int = 0,
         seed: int = 42,
         device: str | None = None,
-        save_path: Path | None = Path(__file__).parents[3] / "trained_models" / "lstm",
+        save_path: Path = Path(__file__).parents[3] / "trained_models" / "lstm",
     ) -> None:
         """
         Initialize the training module for the fused LSTM and MLP model.
@@ -63,7 +63,7 @@ class FusionLSTMTrainModule(TrainerBase):
             num_workers (int): Number of workers for data loading. Defaults to 0.
             seed (int): Random seed for reproducibility. Defaults to 42.
             device (str | None): Device to use for training. Defaults to None.
-            save_path (Path | None): Path to save the trained model. Defaults to the default save path.
+            save_path (Path): Path to save the trained model. Defaults to the default save path.
 
         Returns:
             None
