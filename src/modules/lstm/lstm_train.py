@@ -361,7 +361,10 @@ class FusionLSTMTrainModule(TrainerBase):
                 f"Processing on: {x_train.shape[-1] - len(self._drop_column)} columns"
             )
             logger.info(f"Total training samples: {len(x_train):,}")
-            logger.info(f"Total validation samples: {len(x_val):,}")
+
+            if x_val is not None:
+                logger.info(f"Total validation samples: {len(x_val):,}")
+
             logger.info("Building dataloaders...")
 
         train_loader = self._build_dataloader(x_train, y_train)
