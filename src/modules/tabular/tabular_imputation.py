@@ -76,6 +76,15 @@ class TabularTrainTestMeanImputerModule(ModelPipelineStep):
         self,
         impute_columns: list[str] | None = None,
     ) -> None:
+        """
+        Initialize the tabular column mean imputer class
+        
+        Args:
+            columns_to_impute (list[str], optional): The columns to impute.
+                Defaults to None, which imputes all columns.
+        Returns:
+            None
+        """
         self._impute_columns = impute_columns
         super().__init__()
 
@@ -85,6 +94,18 @@ class TabularTrainTestMeanImputerModule(ModelPipelineStep):
         x_test: pd.DataFrame,
         verbose: bool = True,
     ) -> dict[str, pd.DataFrame]:
+        """
+        Mean impute missing values in the dataframe
+        
+        Args:
+            x_train (pd.DataFrame): The training dataframe to mean impute missing
+                values in
+            x_test (pd.DataFrame): The test dataframe to mean impute missing
+                values in
+            verbose (bool, optional): Verbose mode. Defaults to True.
+        Returns:
+            dict[str, pd.DataFrame]: The dataframe with missing values imputed
+        """
         if verbose:
             console.section(title="Imputing missing values (train only)")
             logger.info(f"Columns to impute: {self._impute_columns}")

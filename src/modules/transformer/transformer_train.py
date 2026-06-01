@@ -238,7 +238,6 @@ class TransformerTrainModule(TrainerBase):
                     f"loss={epoch_loss:.4f}  acc={epoch_acc:.4f}"
                 )
 
-        # Restore the best-val-loss weights (if validation was performed).
         if best_state is not None:
             model.load_state_dict(best_state)
             if verbose:

@@ -150,6 +150,16 @@ class TabularTrainTestOneHotEncoderModule(ModelPipelineStep):
         x_test: pd.DataFrame,
         verbose: bool = True,
     ) -> dict[str, pd.DataFrame]:
+        """
+        One-hot encode columns in the dataframe
+
+        Args:
+            x_train (pd.DataFrame): The training dataframe to one-hot encode
+            x_test (pd.DataFrame): The test dataframe to one-hot encode
+            verbose (bool, optional): Verbose mode. Defaults to True.
+        Returns:
+            dict[str, pd.DataFrame]: The one-hot encoded dataframe
+        """
         if verbose:
             console.section(title="One-hot encoding (train-fit only)")
             logger.info(f"Columns to encode: {self._columns_to_encode}")

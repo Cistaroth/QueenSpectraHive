@@ -15,10 +15,6 @@ from torch_datasets.lstm_dataset import LSTMBeeAudioDataset, pad_collate_fn
 
 
 class FusionLSTMTrainModule(TrainerBase):
-    """
-    Pipeline step that trains a fused LSTM and MLP model on audio and tabular features.
-    """
-
     name = "FusionLSTMTrainModule"
     inputs = {"x_train", "y_train", "x_val", "y_val"}
     outputs = {"model"}
@@ -263,7 +259,6 @@ class FusionLSTMTrainModule(TrainerBase):
                     f"loss={epoch_loss:.4f}  acc={epoch_acc:.4f}"
                 )
 
-        # Restore the best-val-loss weights (if validation was performed).
         if best_state is not None:
             model.load_state_dict(best_state)
             if verbose:

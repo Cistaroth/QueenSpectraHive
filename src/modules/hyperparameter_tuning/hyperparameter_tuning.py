@@ -75,12 +75,6 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
         """
         Build a per-row group id from the configured group column.
 
-        By the time tuning runs the group column has usually been one-hot encoded
-        (e.g. ``hive number`` -> ``hive number_3``/``_4``/``_5``), so the raw column may
-        be gone. This reconstructs a stable group key from either the raw column or its
-        one-hot children, so grouped cross-validation can keep every group on one side
-        of each fold. Returns None when no group column is configured or matched.
-
         Args:
             x_train (pd.DataFrame): The training features.
         Returns:
@@ -102,16 +96,10 @@ class HyperparameterTuningStratifiedKFoldModule(ModelPipelineStep):
         """
         Return the set of parameter names accepted by a trainer's ``train`` method.
 
-        Used to decide, at runtime, whether a given trainer supports optional
-        arguments such as ``x_val``/``y_val`` (for validation-based checkpoint
-        selection) or ``save_model`` (for controlling disk persistence). This keeps
-        the tuning loop generic across trainers with different ``train`` signatures
-        (e.g. the logistic-regression trainer takes no validation set).
-
         Args:
-            trainer (Any): A trainer instance exposing a ``train`` method.
+            trainer (Any): A trainer base instance.
         Returns:
-            set[str]: Parameter names of ``trainer.train``.
+            set[str]: Parameter names of train base instance.
         """
         try:
             return set(inspect.signature(trainer.train).parameters)
