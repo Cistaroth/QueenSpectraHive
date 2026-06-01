@@ -9,6 +9,12 @@ class TrainerBase(ModelPipelineStep):
         pass
 
 class InferencerBase(ModelPipelineStep):
+    def __init__(self) -> None:
+        super().__init__()
+
+        # Keep track of indices in case of filtering non existent x-test
+        self.last_kept_index = None
+        
     @abstractmethod
     def inference(self, model, x_test) -> Any:
         pass

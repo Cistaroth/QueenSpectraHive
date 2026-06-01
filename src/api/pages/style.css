@@ -107,6 +107,25 @@ html, body {
 .file-error.visible { display: flex; }
 .file-error span { font-size: 0.82rem; color: #f08060; }
 
+/* Required-field validation in the tabular panel */
+.tabular-validation {
+  display: none;
+  margin-bottom: 1rem;
+  padding: 0.7rem 0.9rem;
+  background: rgba(180,40,0,0.12);
+  border-left: 2px solid #c04000;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #f08060;
+}
+.tabular-validation.visible { display: block; }
+
+.field-input.invalid {
+  border-color: #c04000;
+  background: rgba(180,40,0,0.10);
+}
+
 .audio-panel {
   width: 100%; display: none; flex-direction: column; gap: 0;
   animation: fadeUp 0.5s ease both;
@@ -503,6 +522,14 @@ html, body {
   background: rgba(232,151,10,0.09);
 }
 .field-input::placeholder { color: rgba(253,233,138,0.22); }
+
+/* Hide the native up/down spinners on number inputs */
+.field-input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.field-input[type="number"]::-webkit-inner-spin-button,
+.field-input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 
 /* datetime-local calendar icon tint */
 .field-input[type="datetime-local"]::-webkit-calendar-picker-indicator {

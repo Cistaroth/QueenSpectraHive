@@ -1,11 +1,15 @@
 from abc import abstractmethod
 from pathlib import Path
-from typing import Sequence
+from typing import Sequence, Any
 
+import numpy as np
 import pandas as pd
 import torch
 
-from modules.data_loading.audio_data_loader import LazyAudioDataset, AudioDataLoaderModule
+from modules.data_loading.audio_data_loader import (
+    LazyAudioDataset,
+    AudioDataLoaderModule,
+)
 from logger import logger
 
 
@@ -29,22 +33,65 @@ class BeeAudioDataset(LazyAudioDataset):
             df (pd.DataFrame): DataFrame with audio metadata (file name, start_sec, end_sec).
             labels (pd.Series): Target labels for each sample.
             audio_dir (Path): Directory containing audio segment files.
-        
+
         Returns:
             None
         """
+        self._audio_dir = Path(audio_dir)
+        features, labels = self._drop_missing_audio(features, labels)
+        self._features = features
+
         if labels is None:
             self._labels = None
         else:
             self._labels = labels.reset_index(drop=True)
 
-        self._audio_dir = Path(audio_dir)
-
         loader_module = AudioDataLoaderModule(
             filepath=self._audio_dir,
             sample_rate=self.TARGET_SR,
         )
-        self._lazy_dataset = loader_module.run(dataframe=features, verbose=False)["dataset"]
+        self._lazy_dataset = loader_module.run(dataframe=features, verbose=False)[
+            "dataset"
+        ]
+
+    def _drop_missing_audio(
+        self,
+        features: pd.DataFrame,
+        labels: pd.Series | None,
+    ) -> tuple[pd.DataFrame, Any]:
+        """
+        
+        Drops rows from the features (and corresponding labels) where the expected audio segments are missing on disk.
+        
+        Args:
+            features (pd.DataFrame): DataFrame containing the features, including a "file name
+                column with audio metadata.
+            labels (pd.Series | None): Series containing the target labels, or None if no labels
+                are provided.
+        Returns:
+            tuple[pd.DataFrame, pd.Series | None]: The filtered features and labels with rows dropped where audio segments are missing.
+        """
+        def _has_audio(p) -> bool:
+            if not isinstance(p, str):
+                return False
+            path = Path(p)
+            search_dir = path.parent if path.is_absolute() else self._audio_dir
+            return bool(list(search_dir.glob(f"{path.stem}__segment*.wav")))
+
+        mask = features["file name"].apply(_has_audio)
+        missing = (~mask).sum()
+
+        if missing:
+            logger.warning(
+                f"Dropping {missing} row(s) with no audio segments on disk: "
+                + str(features.loc[~mask, "file name"].tolist())
+            )
+
+        self.kept_index = np.where(mask.to_numpy())[0]
+        features = features[mask].reset_index(drop=True)
+        if labels is not None:
+            labels = labels[mask].reset_index(drop=True)
+        return features, labels
 
     def __len__(self) -> int:
         """
@@ -58,7 +105,7 @@ class BeeAudioDataset(LazyAudioDataset):
         """
         return len(self._lazy_dataset)
 
-    def __getitem__(self, idx: int):
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, ...]:
         """
         Get a sample
 
@@ -71,33 +118,30 @@ class BeeAudioDataset(LazyAudioDataset):
         if self._labels is None:
             label = torch.tensor(-1, dtype=torch.long)
         else:
-            label = int(self._labels.iloc[idx])
+            label = torch.tensor(int(self._labels.iloc[idx]), dtype=torch.long)
 
         try:
-            # Get waveform from LazyAudioDataset via AudioDataLoaderModule (shape: [channels, time])
             waveform = self._lazy_dataset[idx]
-            logger.debug(f"Loaded waveform at index {idx} with shape {waveform.shape} and dtype {waveform.dtype}")
+            logger.debug(
+                f"Loaded waveform at index {idx} with shape {waveform.shape} and dtype {waveform.dtype}"
+            )
             if not isinstance(waveform, torch.Tensor):
                 waveform = torch.tensor(waveform)
+                
         except Exception as e:
-            logger.warning(f"Failed to load waveform at index {idx}: {e}. Using silence.")
+            logger.warning(
+                f"Failed to load waveform at index {idx}: {e}. Using silence."
+            )
             waveform = torch.zeros((1, self.TARGET_SR * 15))
+        
+        # If the audio has multiple channels, average them.
+        if waveform.dim() > 1:
+            waveform = waveform.mean(dim=0)
 
-        try:
-            # Squeeze to get a 1D vector y
-            if waveform.dim() > 1:
-                waveform = waveform.mean(dim=0)
-            
-            features = self._get_features(idx, waveform)
-
-        except Exception as e:
-            logger.warning(f"AST feature extraction failed at index {idx}: {e}")
-            features = [torch.zeros((1024, 128))]
+        features = self._get_features(idx, waveform)
 
         return *features, label
 
     @abstractmethod
     def _get_features(self, idx: int, waveform: torch.Tensor) -> Sequence:
         pass
-    
-

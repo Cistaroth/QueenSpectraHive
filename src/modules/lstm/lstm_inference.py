@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from logger import console, logger
 from modules.lstm.lstm_model import FusionLSTMModel
 from modules.model_bases import InferencerBase
-from torch_datasets.lstm_dataset import LSTMBeeAudioDataset
+from torch_datasets.lstm_dataset import LSTMBeeAudioDataset, pad_collate_fn
 
 
 class FusionLSTMInferenceModule(InferencerBase):
@@ -18,9 +18,9 @@ class FusionLSTMInferenceModule(InferencerBase):
 
     def __init__(
         self,
-        drop_column: list[str],
-        n_mfcc: int,
-        audio_dir: str = "data/sound_files/sound_files",
+        drop_column: list[str] = ["file name"],
+        n_mfcc: int = 40,
+        audio_dir: str = "src/data/sound_files/sound_files",
         audio_path_col: str = "file name",
         batch_size: int = 32,
         num_workers: int = 0,
@@ -59,12 +59,23 @@ class FusionLSTMInferenceModule(InferencerBase):
         else:
             self._device = torch.device(device)
 
-    def _build_loader(self, x_test: pd.DataFrame,) -> DataLoader:
+    def _build_loader(
+        self,
+        x_test: pd.DataFrame,
+    ) -> DataLoader:
+        """
+        Build a DataLoader for the test set.
+        
+        Args:
+            x_test (pd.DataFrame): Test features with audio metadata and tabular data.
+        Returns:
+            DataLoader: A DataLoader yielding batches of (mel, tabular, labels, lengths).
+        """
         dataset = LSTMBeeAudioDataset(
             columns_to_drop=self._columns_to_drop,
             features=x_test,
             audio_dir=self._audio_dir,
-            n_mfcc=self._n_mfcc
+            n_mfcc=self._n_mfcc,
         )
         return DataLoader(
             dataset,
@@ -72,13 +83,14 @@ class FusionLSTMInferenceModule(InferencerBase):
             shuffle=False,
             num_workers=self._num_workers,
             pin_memory=(self._device.type == "cuda"),
+            collate_fn=pad_collate_fn,
         )
 
     def run(
         self,
         model: FusionLSTMModel,
         x_test: pd.DataFrame,
-        verbose: bool = True,
+        verbose: bool = False,
     ) -> dict[str, np.ndarray]:
         """
         Run batch inference and return predictions + probabilities.
@@ -102,10 +114,11 @@ class FusionLSTMInferenceModule(InferencerBase):
         model.eval()
 
         loader = self._build_loader(x_test)
+        self.last_kept_index = loader.dataset.kept_index
 
         all_preds, all_proba = [], []
         with torch.no_grad():
-            for batch_mel, batch_tabular, _ in loader:
+            for batch_mel, batch_tabular, _, _ in loader:
                 batch_mel = batch_mel.to(self._device)
                 batch_tabular = batch_tabular.to(self._device)
 
@@ -115,6 +128,13 @@ class FusionLSTMInferenceModule(InferencerBase):
 
                 all_preds.append(preds.cpu().numpy())
                 all_proba.append(probs.cpu().numpy())
+
+        if not all_preds:
+            logger.warning(
+                "Inference produced no predictions. This may indicate an issue" \
+                "with the test data or DataLoader configuration."
+            )
+            return {"y_pred": np.array([]), "y_pred_proba": np.array([])}
 
         y_pred = np.concatenate(all_preds)
         y_pred_proba = np.concatenate(all_proba)

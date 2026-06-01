@@ -54,40 +54,74 @@ dataToggle.addEventListener('click', () => {
 });
 tabularClose.addEventListener('click', closeTabularPanel);
 
-const TABULAR_FIELD_IDS = [
-  'fieldHiveTemp', 'fieldHiveHumidity', 'fieldHivePressure', 'fieldFrames',
-  'fieldWeatherTemp', 'fieldWeatherHumidity', 'fieldWeatherPressure',
-  'fieldWind', 'fieldCloud',
-  'fieldDate', 'fieldDevice', 'fieldHive',
+// Every tabular field the API requires, mapped to its DOM id, the server-side
+// form field name, and a human label used in validation/error messages.
+const TABULAR_FIELDS = [
+  { id: 'fieldHiveTemp',        name: 'hive_temp',        label: 'Hive Temperature' },
+  { id: 'fieldHiveHumidity',    name: 'hive_humidity',    label: 'Hive Humidity' },
+  { id: 'fieldHivePressure',    name: 'hive_pressure',    label: 'Hive Pressure' },
+  { id: 'fieldFrames',          name: 'frames',           label: 'Frames' },
+  { id: 'fieldWeatherTemp',     name: 'weather_temp',     label: 'Weather Temperature' },
+  { id: 'fieldWeatherHumidity', name: 'weather_humidity', label: 'Weather Humidity' },
+  { id: 'fieldWeatherPressure', name: 'weather_pressure', label: 'Weather Pressure' },
+  { id: 'fieldWind',            name: 'wind_speed',       label: 'Wind Speed' },
+  { id: 'fieldCloud',           name: 'cloud_coverage',   label: 'Cloud Coverage' },
+  { id: 'fieldDate',            name: 'date',             label: 'Date & Time' },
+  { id: 'fieldDevice',          name: 'device',           label: 'Device №' },
+  { id: 'fieldHive',            name: 'hive_number',      label: 'Hive №' },
 ];
 
+const tabularValidation = document.getElementById('tabularValidation');
+
+function showTabularValidation(msg) {
+  tabularValidation.textContent = msg;
+  tabularValidation.classList.add('visible');
+}
+
+function hideTabularValidation() {
+  tabularValidation.classList.remove('visible');
+}
+
 resetTabular.addEventListener('click', () => {
-  TABULAR_FIELD_IDS.forEach(id => { document.getElementById(id).value = ''; });
+  TABULAR_FIELDS.forEach(f => {
+    const el = document.getElementById(f.id);
+    el.value = '';
+    el.classList.remove('invalid');
+  });
+  hideTabularValidation();
 });
 
-// Collect tabular fields into an object; omit keys with empty values.
+// Clearing a field's error as soon as the user starts correcting it.
+TABULAR_FIELDS.forEach(f => {
+  document.getElementById(f.id).addEventListener('input', () => {
+    document.getElementById(f.id).classList.remove('invalid');
+    if (!document.querySelector('.field-input.invalid')) hideTabularValidation();
+  });
+});
+
+// Mark every empty required field and return the list of missing ones.
+function validateTabular() {
+  const missing = [];
+  TABULAR_FIELDS.forEach(f => {
+    const el = document.getElementById(f.id);
+    if (el.value.trim() === '') {
+      el.classList.add('invalid');
+      missing.push(f);
+    } else {
+      el.classList.remove('invalid');
+    }
+  });
+  return missing;
+}
+
+// Collect tabular fields into an object. All are required, so by the time this
+// runs (after validateTabular) every field has a value.
 function getTabularData() {
-  const get = id => document.getElementById(id).value;
   const out = {};
-
-  // hive sensors
-  if (get('fieldHiveTemp'))     out.hive_temp         = get('fieldHiveTemp');
-  if (get('fieldHiveHumidity')) out.hive_humidity      = get('fieldHiveHumidity');
-  if (get('fieldHivePressure')) out.hive_pressure      = get('fieldHivePressure');
-  if (get('fieldFrames'))       out.frames             = get('fieldFrames');
-
-  // weather
-  if (get('fieldWeatherTemp'))      out.weather_temp      = get('fieldWeatherTemp');
-  if (get('fieldWeatherHumidity'))  out.weather_humidity  = get('fieldWeatherHumidity');
-  if (get('fieldWeatherPressure'))  out.weather_pressure  = get('fieldWeatherPressure');
-  if (get('fieldWind'))             out.wind_speed        = get('fieldWind');
-  if (get('fieldCloud'))            out.cloud_coverage    = get('fieldCloud');
-
-  // recording info
-  if (get('fieldDate'))   out.date        = get('fieldDate');
-  if (get('fieldDevice')) out.device      = get('fieldDevice');
-  if (get('fieldHive'))   out.hive_number = get('fieldHive');
-
+  TABULAR_FIELDS.forEach(f => {
+    const v = document.getElementById(f.id).value.trim();
+    if (v !== '') out[f.name] = v;
+  });
   return out;
 }
 
@@ -332,8 +366,43 @@ progressWrap.addEventListener('click', e => {
 deleteBtn.addEventListener('click', resetAll);
 
 // ── Upload & inference ──────────────────────────────────────────────────────
+// Turn a server error response into a human-readable message. FastAPI 422
+// validation errors arrive as detail: [{loc, msg, ...}], which we map back to
+// the field labels; other errors use detail as a plain string.
+function describeServerError(status, body) {
+  if (body && Array.isArray(body.detail)) {
+    const labels = body.detail.map(e => {
+      const key = Array.isArray(e.loc) ? e.loc[e.loc.length - 1] : null;
+      if (key === 'audio_file') return 'Audio file';
+      const field = TABULAR_FIELDS.find(f => f.name === key);
+      return field ? field.label : (key || 'a field');
+    });
+    return 'The server rejected some required data: ' + [...new Set(labels)].join(', ') + '.';
+  }
+  if (body && typeof body.detail === 'string') return body.detail;
+  return `Server error ${status}`;
+}
+
+async function safeJson(res) {
+  try { return await res.json(); } catch (_) { return null; }
+}
+
 uploadBtn.addEventListener('click', async () => {
   if (!currentFile) return;
+
+  // Block the request if any required hive-data field is empty — open the
+  // panel, highlight what's missing, and let the user fill it in.
+  const missing = validateTabular();
+  if (missing.length) {
+    openTabularPanel();
+    showTabularValidation(
+      `All ${TABULAR_FIELDS.length} hive-data fields are required. ` +
+      `Please fill in: ${missing.map(m => m.label).join(', ')}.`
+    );
+    return;
+  }
+  hideTabularValidation();
+
   audioEl.pause();
   playIcon.style.display  = '';
   pauseIcon.style.display = 'none';
@@ -342,7 +411,7 @@ uploadBtn.addEventListener('click', async () => {
 
   const formData = new FormData();
   const wavFile = new File([currentFile], currentFile.name, { type: 'audio/wav' });
-  formData.append('file', wavFile);
+  formData.append('audio_file', wavFile);
 
   const tabular = getTabularData();
   for (const [key, val] of Object.entries(tabular)) {
@@ -356,9 +425,7 @@ uploadBtn.addEventListener('click', async () => {
     });
 
     if (!res.ok) {
-      let detail = `Server error ${res.status}`;
-      try { const j = await res.json(); detail = j.detail || detail; } catch (_) {}
-      showResult(false, null, detail);
+      showResult(false, null, describeServerError(res.status, await safeJson(res)));
       return;
     }
 

@@ -10,46 +10,73 @@ class FusionLSTMModel(
         lstm_layers: tuple,
         features_input_size: int,
         embeddings_model: tuple,
-        ff_hidden_size: int, 
+        ff_hidden_size: int,
     ) -> None:
+        """
+        Initialize the FusionLSTMModel.
+
+        Args:
+            lstm_layers (tuple): A tuple containing the LSTM layer parameters in the order (
+                input_size, hidden_size, num_layers, dropout).
+            features_input_size (int): The size of the input features for the tabular data.
+            embeddings_model (tuple): A tuple of nn.Module layers that process the tabular data.
+            ff_hidden_size (int): The hidden layer size for the feed-forward network after concatenation
+        Returns:
+            None
+        """
         super().__init__()
 
         seq_input_size, lstm_hidden_size, lstm_num_layers, lstm_dropout = lstm_layers
 
-        # LSTM Component
+        # Normalization for sequential data
+        self.input_norm = nn.LayerNorm(seq_input_size)
+
+        # LSTM
         self.lstm = nn.LSTM(
             input_size=seq_input_size,
             hidden_size=lstm_hidden_size,
-            num_layers=lstm_num_layers, 
+            num_layers=lstm_num_layers,
             dropout=lstm_dropout,
-            batch_first=True
+            batch_first=True,
         )
 
-        # Tabular component
-        self.embeddings_model = nn.Sequential(
-            *embeddings_model
-        )
+        # Tabular
+        self.embeddings_model = nn.Sequential(*embeddings_model)
 
-        # Feed-forward Component
+        # Feed-forward layers for combined features
         self.ff = nn.Sequential(
             nn.Linear(lstm_hidden_size + features_input_size, ff_hidden_size),
             nn.ReLU(),
-            nn.Linear(ff_hidden_size, 1)
+            nn.Linear(ff_hidden_size, 1),
         )
 
-    def forward(self, historical_data: torch.Tensor, current_data: torch.Tensor):
-        lstm_output, _ = self.lstm(historical_data)
+    def forward(
+        self,
+        historical_data: torch.Tensor,
+        current_data: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Forward pass of the model.
+
+        Args:
+            historical_data (torch.Tensor): Tensor of shape (batch_size, seq_len, seq_input
+                _size) containing the sequential data (e.g., MFCC features).
+            current_data (torch.Tensor): Tensor of shape (batch_size, features_input_size)
+                containing the tabular data features.
+            lengths (torch.Tensor | None): Optional tensor of shape (batch_size,) containing
+                the actual lengths of the sequences in historical_data for proper masking.
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, 1) containing the predicted probabilities.
+        """
+        lstm_output, _ = self.lstm(self.input_norm(historical_data))
 
         tabular_embedding_output = self.embeddings_model(current_data)
 
-        # Select the last LSTM output (final time step)
-        lstm_last_output = lstm_output[:, -1, :]
+        seq_representation = lstm_output.mean(dim=1)
 
-        # Concatenate the LSTM output with current features
-        combined_features = torch.cat([lstm_last_output, tabular_embedding_output], dim=1)
+        combined_features = torch.cat(
+            [seq_representation, tabular_embedding_output], dim=1
+        )
 
-        # Pass through the feed-forward component for final prediction
         result = self.ff(combined_features)
         return result
-
-
