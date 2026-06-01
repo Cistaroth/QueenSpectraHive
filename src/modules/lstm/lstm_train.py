@@ -300,13 +300,13 @@ class FusionLSTMTrainModule(TrainerBase):
             batch_features,
             batch_tabular_features,
             batch_labels,
-            batch_lengths,
+            _,
         ) in loader:
             batch_features = batch_features.to(self._device)
             batch_tabular_features = batch_tabular_features.to(self._device)
             batch_labels = batch_labels.to(self._device)
 
-            logits = model(batch_features, batch_tabular_features, batch_lengths)
+            logits = model(batch_features, batch_tabular_features)
             loss = criterion(logits.squeeze(1), batch_labels.float())
 
             running_loss += loss.item() * len(batch_labels)
